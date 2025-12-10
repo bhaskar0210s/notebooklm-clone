@@ -1,11 +1,11 @@
-import { Toaster } from '@/components/ui/toaster'
-import { ReactNode } from 'react'
-import './globals.css'
+import { Toaster } from "@/components/ui/toaster";
+import { ReactNode } from "react";
+import "./globals.css";
 
 export const metadata = {
-  title: 'NotebookLM Clone',
-  description: 'NotebookLM Clone app',
-}
+  title: "NotebookLM Clone",
+  description: "NotebookLM Clone app",
+};
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -15,6 +15,5 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <Toaster />
       </body>
     </html>
-  )
+  );
 }
-

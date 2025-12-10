@@ -45,11 +45,11 @@ export default function Home() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center p-4 md:p-24 max-w-5xl mx-auto w-full">
+    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col items-center p-4 md:p-24">
       <Messages messages={messages} />
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-900 border-t dark:border-gray-800">
-        <div className="max-w-5xl mx-auto">
+      <div className="fixed bottom-0 left-0 right-0 border-t bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+        <div className="mx-auto max-w-5xl">
           <MessageInput
             value={input}
             onChange={setInput}

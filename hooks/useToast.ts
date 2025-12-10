@@ -28,4 +28,3 @@ export function useToast(): ToastMethods {
 
   return showToast;
 }
-
