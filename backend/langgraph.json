@@ -1,0 +1,8 @@
+{
+  "node_version": "22",
+  "graphs": {
+    "retrieval_graph": "./src/retrieval_graph/graph.ts:graph"
+  },
+  "env": ".env",
+  "dependencies": ["."]
+}

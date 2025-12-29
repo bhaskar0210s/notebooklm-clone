@@ -1,0 +1,9 @@
+# LangGraph API
+.langgraph_api
+
+# Node.js
+node_modules
+dist
+
+# Environment variables
+.env
