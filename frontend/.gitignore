@@ -1,0 +1,11 @@
+# dependencies
+/node_modules
+notes.md
+
+# misc
+.DS_Store
+
+# typescript
+next-env.d.ts
+
+.next
