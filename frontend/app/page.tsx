@@ -28,7 +28,7 @@ export default function Home() {
         <Messages messages={messages} isLoading={isLoading} />
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-gray-950 via-gray-950/95 to-transparent pb-6 pt-12">
+      <div className="fixed bottom-0 left-0 right-0 z-10 bg-linear-to-t from-gray-950 via-gray-950/95 to-transparent pb-6 pt-12">
         <div className="mx-auto max-w-4xl px-4">
           <MessageInput
             ref={inputRef}

@@ -87,7 +87,7 @@ export function Messages({ messages, isLoading }: MessagesProps) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center">
         <div className="text-center">
-          <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 shadow-lg shadow-blue-500/20">
+          <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-purple-600 shadow-lg shadow-blue-500/20">
             <svg
               className="h-8 w-8 text-white"
               fill="none"
@@ -102,7 +102,7 @@ export function Messages({ messages, isLoading }: MessagesProps) {
               />
             </svg>
           </div>
-          <h1 className="mb-3 bg-gradient-to-r from-gray-100 to-gray-300 bg-clip-text text-5xl font-bold text-transparent">
+          <h1 className="mb-3 bg-linear-to-r from-gray-100 to-gray-300 bg-clip-text text-5xl font-bold text-transparent">
             NotebookLM Clone
           </h1>
           <p className="mx-auto max-w-md text-lg text-gray-400">
@@ -128,7 +128,7 @@ export function Messages({ messages, isLoading }: MessagesProps) {
             <div
               className={`relative rounded-2xl px-5 py-3 shadow-lg transition-all ${
                 message.role === "user"
-                  ? "bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-blue-500/20"
+                  ? "bg-linear-to-br from-blue-600 to-blue-700 text-white shadow-blue-500/20"
                   : "bg-gray-800/80 backdrop-blur-sm text-gray-100 shadow-gray-900/50 border border-gray-700/50"
               }`}
             >

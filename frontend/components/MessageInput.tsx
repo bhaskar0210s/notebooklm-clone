@@ -53,7 +53,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             type={isLoading ? "button" : "submit"}
             onClick={handleButtonClick}
             disabled={isLoading ? false : !value.trim() || disabled}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/30 transition-all hover:from-blue-500 hover:to-blue-600 hover:shadow-blue-500/40 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:from-blue-600 disabled:hover:to-blue-700 active:scale-95"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/30 transition-all hover:from-blue-500 hover:to-blue-600 hover:shadow-blue-500/40 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:from-blue-600 disabled:hover:to-blue-700 active:scale-95"
             aria-label={isLoading ? "Stop generation" : disabled ? "Waiting for connection" : "Send message"}
           >
             {isLoading ? (
