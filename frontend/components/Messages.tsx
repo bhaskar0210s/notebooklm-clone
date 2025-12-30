@@ -2,6 +2,8 @@ import React, { useRef, useEffect, useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import type { Message } from "@/types/chat";
 
 interface MessagesProps {
@@ -136,6 +138,8 @@ export function Messages({ messages, isLoading }: MessagesProps) {
                 {message.content ? (
                   <div className="m-0 whitespace-pre-wrap wrap-break-word leading-tight">
                     <ReactMarkdown
+                      remarkPlugins={[remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
                       components={{
                       p: ({ children }) => {
                         // Filter out empty paragraphs
