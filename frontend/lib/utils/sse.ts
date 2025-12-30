@@ -2,7 +2,12 @@
  * SSE (Server-Sent Events) parsing and streaming utilities
  */
 
-import type { SSEEvent, SSEMessagePayload, ContentPart } from "@/types/chat";
+import type {
+  SSEEvent,
+  SSEMessagePayload,
+  ContentPart,
+  SSEErrorData,
+} from "@/types/chat";
 import { SSE_CONSTANTS } from "@/constants/api";
 
 /**
@@ -116,6 +121,34 @@ export function isSSEErrorEvent(eventChunk: unknown): boolean {
     "event" in eventChunk &&
     (eventChunk as SSEEvent).event === SSE_CONSTANTS.ERROR_EVENT
   );
+}
+
+/**
+ * Type guard to check if data is an SSE error data object.
+ */
+function isSSEErrorData(data: unknown): data is SSEErrorData {
+  return (
+    data !== null &&
+    typeof data === "object" &&
+    ("message" in data || "error" in data)
+  );
+}
+
+/**
+ * Checks if an SSE event is an interrupted error event.
+ */
+export function isSSEInterruptedErrorEvent(eventChunk: unknown): boolean {
+  if (
+    eventChunk === null ||
+    typeof eventChunk !== "object" ||
+    !("event" in eventChunk) ||
+    (eventChunk as SSEEvent).event !== SSE_CONSTANTS.ERROR_EVENT
+  ) {
+    return false;
+  }
+
+  const eventData = (eventChunk as SSEEvent).data;
+  return isSSEErrorData(eventData) && eventData.message === "interrupt";
 }
 
 /**

@@ -6,7 +6,12 @@ import { getLangGraphClient } from "@/lib/langgraph";
 import { retrievalAssistantId } from "@/constants/graphConfigs";
 import { API_ENDPOINTS, ERROR_MESSAGES } from "@/constants/api";
 import type { Message, ConnectionStatus } from "@/types/chat";
-import { parseSSEChunk, isSSEErrorEvent, readSSEStream } from "@/lib/utils/sse";
+import {
+  parseSSEChunk,
+  isSSEErrorEvent,
+  readSSEStream,
+  isSSEInterruptedErrorEvent,
+} from "@/lib/utils/sse";
 
 interface UseChatReturn {
   messages: Message[];
@@ -135,7 +140,9 @@ export function useChat(): UseChatReturn {
             if (runId) {
               currentRunIdRef.current = runId;
             } else {
-              toast.error(ERROR_MESSAGES.NO_RUN_ID);
+              if (!isSSEInterruptedErrorEvent(event)) {
+                toast.error(ERROR_MESSAGES.NO_RUN_ID);
+              }
             }
           }
 
@@ -143,7 +150,9 @@ export function useChat(): UseChatReturn {
           if (content) {
             appendAssistantMessage(content);
           } else if (isSSEErrorEvent(event)) {
-            appendAssistantMessage(ERROR_MESSAGES.STREAMING_ERROR);
+            if (!isSSEInterruptedErrorEvent(event)) {
+              toast.error(ERROR_MESSAGES.STREAMING_ERROR);
+            }
           }
         }
       } catch (error) {

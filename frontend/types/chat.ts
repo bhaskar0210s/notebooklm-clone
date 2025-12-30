@@ -24,9 +24,15 @@ export interface SSEEvent {
   data?: SSEEventData;
 }
 
+export interface SSEErrorData {
+  message?: string;
+  error?: string;
+}
+
 export type SSEEventData =
   | SSEMessagePayload[]
   | { messages?: SSEMessagePayload[] }
+  | SSEErrorData
   | unknown;
 
 export interface SSEMessagePayload {
