@@ -64,7 +64,6 @@ export async function POST(request: Request) {
             controller.enqueue(encoder.encode(formatSSEData(chunk)));
           }
         } catch (streamError) {
-          console.error("Streaming error:", streamError);
           controller.enqueue(
             encoder.encode(
               formatSSEData({
@@ -87,7 +86,6 @@ export async function POST(request: Request) {
       },
     });
   } catch (routeError) {
-    console.error("Chat route error:", routeError);
     return errorResponse("Internal server error", 500);
   }
 }

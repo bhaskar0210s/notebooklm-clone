@@ -56,7 +56,6 @@ export function useChat(): UseChatReturn {
           setConnectionStatus("connected");
         }
       } catch (error) {
-        console.error("Error creating thread:", error);
         if (!isCancelled) {
           setConnectionStatus("error");
           toast.error(ERROR_MESSAGES.CONNECTION_FAILED);
@@ -190,7 +189,6 @@ export function useChat(): UseChatReturn {
         const response = await sendMessage(trimmedInput);
         await processStreamEvents(response);
       } catch (error) {
-        console.error("Error sending message:", error);
         appendAssistantMessage(ERROR_MESSAGES.PROCESSING_ERROR);
         toast.error(
           error instanceof Error ? error.message : ERROR_MESSAGES.UNKNOWN_ERROR,
@@ -234,7 +232,7 @@ export function useChat(): UseChatReturn {
           ).cancel(threadId, currentRunIdRef.current);
         }
       } catch (cancelError) {
-        console.debug("Error cancelling run:", cancelError);
+        // Silently handle cancellation errors
       }
     }
 
@@ -259,7 +257,6 @@ export function useChat(): UseChatReturn {
       setThreadId(thread.thread_id);
       setConnectionStatus("connected");
     } catch (error) {
-      console.error("Error creating new thread:", error);
       setConnectionStatus("error");
       toast.error(ERROR_MESSAGES.CONNECTION_FAILED);
     }

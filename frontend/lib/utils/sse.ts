@@ -164,7 +164,6 @@ function parseSSELine(line: string): unknown | null {
   try {
     return JSON.parse(jsonString);
   } catch {
-    console.error("Failed to parse SSE event:", trimmedLine);
     return null;
   }
 }
