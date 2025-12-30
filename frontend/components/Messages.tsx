@@ -4,6 +4,8 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import { toast } from "sonner";
+import { DocumentDuplicateIcon, CheckIcon } from "@heroicons/react/24/outline";
 import type { Message } from "@/types/chat";
 
 interface MessagesProps {
@@ -16,6 +18,18 @@ export function Messages({ messages, isLoading }: MessagesProps) {
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const lastScrollTopRef = useRef<number>(0);
   const previousMessageCountRef = useRef<number>(0);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  const copyToClipboard = useCallback(async (text: string, messageIndex: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIndex(messageIndex);
+      toast.success("Message copied to clipboard");
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch (err) {
+      toast.error("Failed to copy message");
+    }
+  }, []);
 
   // Check if user is at the bottom of the page
   const isAtBottom = useCallback(() => {
@@ -271,6 +285,29 @@ export function Messages({ messages, isLoading }: MessagesProps) {
                   </div>
                 )}
               </div>
+            </div>
+            {/* Copy button - appears below message on hover */}
+            <div
+              className={`mt-1 flex transition-opacity opacity-0 group-hover:opacity-100 ${
+                message.role === "user" ? "justify-end" : "justify-start"
+              }`}
+            >
+              <button
+                onClick={() => copyToClipboard(message.content, messageIndex)}
+                className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+                  message.role === "user"
+                    ? "text-gray-400 hover:text-gray-300"
+                    : "text-gray-500 hover:text-gray-400"
+                }`}
+                title="Copy message"
+                aria-label="Copy message"
+              >
+                {copiedIndex === messageIndex ? (
+                  <CheckIcon className="h-3.5 w-3.5" />
+                ) : (
+                  <DocumentDuplicateIcon className="h-3.5 w-3.5" />
+                )}
+              </button>
             </div>
           </div>
         </div>
