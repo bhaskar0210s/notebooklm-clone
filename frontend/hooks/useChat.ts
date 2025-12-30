@@ -22,6 +22,7 @@ interface UseChatReturn {
   handleSubmit: (event: React.FormEvent) => Promise<void>;
   submitMessage: (messageText: string) => Promise<void>;
   stop: () => Promise<void>;
+  newChat: () => Promise<void>;
 }
 
 /**
@@ -241,6 +242,29 @@ export function useChat(): UseChatReturn {
     setIsLoading(false);
   }, [threadId]);
 
+  const newChat = useCallback(async () => {
+    // Stop any ongoing stream first
+    await stop();
+
+    // Clear messages and reset state
+    setMessages([]);
+    setInput("");
+    setIsLoading(false);
+    currentRunIdRef.current = null;
+
+    // Create a new thread
+    try {
+      const client = getLangGraphClient();
+      const thread = await client.threads.create();
+      setThreadId(thread.thread_id);
+      setConnectionStatus("connected");
+    } catch (error) {
+      console.error("Error creating new thread:", error);
+      setConnectionStatus("error");
+      toast.error(ERROR_MESSAGES.CONNECTION_FAILED);
+    }
+  }, [stop]);
+
   return {
     messages,
     input,
@@ -250,5 +274,6 @@ export function useChat(): UseChatReturn {
     handleSubmit,
     submitMessage,
     stop,
+    newChat,
   };
 }
