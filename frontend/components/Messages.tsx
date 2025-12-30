@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -6,14 +6,82 @@ import type { Message } from "@/types/chat";
 
 interface MessagesProps {
   messages: Message[];
+  isLoading: boolean;
 }
 
-export function Messages({ messages }: MessagesProps) {
+export function Messages({ messages, isLoading }: MessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const lastScrollTopRef = useRef<number>(0);
+  const previousMessageCountRef = useRef<number>(0);
 
+  // Check if user is at the bottom of the page
+  const isAtBottom = useCallback(() => {
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const windowHeight = window.innerHeight;
+    const documentHeight = document.documentElement.scrollHeight;
+    const distanceFromBottom = documentHeight - (scrollTop + windowHeight);
+    // Consider at bottom if within 5px (accounting for rounding)
+    return distanceFromBottom <= 5;
+  }, []);
+
+  // Initialize scroll position on mount
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    lastScrollTopRef.current = window.pageYOffset || document.documentElement.scrollTop;
+  }, []);
+
+  // Handle scroll events to detect when user scrolls up
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const previousScrollTop = lastScrollTopRef.current;
+      
+      // Calculate how much the user scrolled (positive = scrolled up, negative = scrolled down)
+      const scrollDelta = previousScrollTop - currentScrollTop;
+
+      // If user scrolled up at all (any upward movement), disable auto-scroll
+      if (scrollDelta > 0) {
+        setShouldAutoScroll(false);
+      }
+      
+      // If user scrolls back down to bottom, re-enable auto-scroll
+      if (isAtBottom()) {
+        setShouldAutoScroll(true);
+      }
+
+      lastScrollTopRef.current = currentScrollTop;
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [isAtBottom]);
+
+  // Re-enable auto-scroll when loading completes or new user message is submitted
+  useEffect(() => {
+    const currentMessageCount = messages.length;
+    const previousMessageCount = previousMessageCountRef.current;
+
+    // Check if a new user message was added (new message count increased)
+    const hasNewUserMessage =
+      currentMessageCount > previousMessageCount &&
+      messages[currentMessageCount - 1]?.role === "user";
+
+    // Re-enable auto-scroll when:
+    // 1. Loading completes (streaming finished)
+    // 2. A new user message is submitted
+    if (!isLoading || hasNewUserMessage) {
+      setShouldAutoScroll(true);
+    }
+
+    previousMessageCountRef.current = currentMessageCount;
+  }, [messages, isLoading]);
+
+  // Auto-scroll when messages change, but only if shouldAutoScroll is true
+  useEffect(() => {
+    if (shouldAutoScroll) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, shouldAutoScroll]);
 
   if (messages.length === 0) {
     return (
