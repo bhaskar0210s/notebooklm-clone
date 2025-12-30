@@ -46,7 +46,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder="Ask anything..."
-            disabled={disabled || isLoading}
+            disabled={disabled}
             className="h-auto flex-1 bg-transparent text-base text-white placeholder:text-gray-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
           />
           <Button
