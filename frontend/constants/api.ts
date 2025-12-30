@@ -27,7 +27,7 @@ export const ERROR_MESSAGES = {
 export const SSE_CONSTANTS = {
   DATA_PREFIX: "data:",
   EVENT_DELIMITER: "\n\n",
-  MESSAGE_EVENT_PREFIX: "messages",
+  MESSAGE_EVENT_PREFIX: "messages/partial",
   ERROR_EVENT: "error",
   AI_TYPES: ["ai", "assistant"] as const,
 } as const;
