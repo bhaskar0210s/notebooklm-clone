@@ -20,6 +20,7 @@ interface UseChatReturn {
   isLoading: boolean;
   connectionStatus: ConnectionStatus;
   handleSubmit: (event: React.FormEvent) => Promise<void>;
+  submitMessage: (messageText: string) => Promise<void>;
   stop: () => Promise<void>;
 }
 
@@ -162,11 +163,9 @@ export function useChat(): UseChatReturn {
     [appendAssistantMessage, extractRunId],
   );
 
-  const handleSubmit = useCallback(
-    async (formEvent: React.FormEvent) => {
-      formEvent.preventDefault();
-
-      const trimmedInput = input.trim();
+  const submitMessage = useCallback(
+    async (messageText: string) => {
+      const trimmedInput = messageText.trim();
       if (!trimmedInput || isLoading) return;
 
       if (connectionStatus !== "connected" || !threadId) {
@@ -201,7 +200,6 @@ export function useChat(): UseChatReturn {
       }
     },
     [
-      input,
       isLoading,
       connectionStatus,
       threadId,
@@ -209,6 +207,14 @@ export function useChat(): UseChatReturn {
       processStreamEvents,
       appendAssistantMessage,
     ],
+  );
+
+  const handleSubmit = useCallback(
+    async (formEvent: React.FormEvent) => {
+      formEvent.preventDefault();
+      await submitMessage(input);
+    },
+    [input, submitMessage],
   );
 
   const stop = useCallback(async () => {
@@ -242,6 +248,7 @@ export function useChat(): UseChatReturn {
     isLoading,
     connectionStatus,
     handleSubmit,
+    submitMessage,
     stop,
   };
 }

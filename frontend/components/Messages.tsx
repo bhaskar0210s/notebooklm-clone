@@ -11,9 +11,15 @@ import type { Message } from "@/types/chat";
 interface MessagesProps {
   messages: Message[];
   isLoading: boolean;
+  onExamplePromptClick?: (prompt: string) => void;
 }
 
-export function Messages({ messages, isLoading }: MessagesProps) {
+const EXAMPLE_PROMPTS = [
+  "What are the main topics discussed in the documents?",
+  "Explain quantum computing in simple terms",
+];
+
+export function Messages({ messages, isLoading, onExamplePromptClick }: MessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const lastScrollTopRef = useRef<number>(0);
@@ -121,9 +127,25 @@ export function Messages({ messages, isLoading }: MessagesProps) {
           <h1 className="mb-3 bg-linear-to-r from-gray-100 to-gray-300 bg-clip-text text-5xl font-bold text-transparent">
             NotebookLM Clone
           </h1>
-          <p className="mx-auto max-w-md text-lg text-gray-400">
-            Start a conversation by typing a message below
-          </p>
+          {onExamplePromptClick && (
+            <div className="mx-auto max-w-2xl">
+              <h2 className="mb-4 text-sm font-semibold text-gray-400">
+                Try these example prompts
+              </h2>
+              <div className="space-y-3">
+                {EXAMPLE_PROMPTS.map((prompt, index) => (
+                <button
+                  key={index}
+                  onClick={() => onExamplePromptClick(prompt)}
+                  disabled={isLoading}
+                  className="w-full rounded-xl border border-gray-700/50 bg-gray-800/50 px-5 py-3.5 text-left text-sm text-gray-300 transition-all hover:border-gray-600/50 hover:bg-gray-800/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-gray-700/50 disabled:hover:bg-gray-800/50"
+                >
+                  {prompt}
+                </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

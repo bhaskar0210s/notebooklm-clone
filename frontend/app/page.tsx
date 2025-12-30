@@ -6,7 +6,7 @@ import { Messages } from "@/components/Messages";
 import { useChat } from "@/hooks/useChat";
 
 export default function Home() {
-  const { messages, input, setInput, isLoading, connectionStatus, handleSubmit, stop } =
+  const { messages, input, setInput, isLoading, connectionStatus, handleSubmit, submitMessage, stop } =
     useChat();
   const inputRef = useRef<MessageInputRef>(null);
 
@@ -25,7 +25,7 @@ export default function Home() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center p-4 pb-32 md:p-8 md:pb-36">
       <div className="w-full flex-1">
-        <Messages messages={messages} isLoading={isLoading} />
+        <Messages messages={messages} isLoading={isLoading} onExamplePromptClick={submitMessage} />
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 z-10 bg-linear-to-t from-gray-950 via-gray-950/95 to-transparent pb-6 pt-12">
