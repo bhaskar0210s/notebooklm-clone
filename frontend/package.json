@@ -17,9 +17,12 @@
   "dependencies": {
     "@heroicons/react": "^2.2.0",
     "@langchain/langgraph-sdk": "^1.3.1",
+    "@types/react-syntax-highlighter": "^15.5.13",
     "next": "^16.1.1",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^16.1.0",
     "sonner": "^2.0.7"
   },
   "devDependencies": {

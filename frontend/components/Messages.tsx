@@ -1,4 +1,7 @@
 import React, { useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { Message } from "@/types/chat";
 
 interface MessagesProps {
@@ -61,11 +64,133 @@ export function Messages({ messages }: MessagesProps) {
                   : "bg-gray-800/80 backdrop-blur-sm text-gray-100 shadow-gray-900/50 border border-gray-700/50"
               }`}
             >
-              <div className="prose prose-invert prose-sm max-w-none">
+              <div className="max-w-none">
                 {message.content ? (
-                  <p className="m-0 whitespace-pre-wrap break-words leading-relaxed">
-                    {message.content}
-                  </p>
+                  <div className="m-0 whitespace-pre-wrap wrap-break-word leading-tight">
+                    <ReactMarkdown
+                      components={{
+                      p: ({ children }) => {
+                        // Filter out empty paragraphs
+                        const text = typeof children === 'string' ? children : 
+                          (Array.isArray(children) ? children.join('') : String(children));
+                        if (!text || text.trim() === '') return null;
+                        return <p className="m-0 leading-tight">{children}</p>;
+                      },
+                      strong: ({ children }) => (
+                        <strong className="font-semibold">{children}</strong>
+                      ),
+                      em: ({ children }) => (
+                        <em className="italic">{children}</em>
+                      ),
+                      ul: ({ children }) => (
+                        <ul className="m-0 ml-4 list-disc space-y-0 leading-tight">
+                          {children}
+                        </ul>
+                      ),
+                      ol: ({ children }) => (
+                        <ol className="m-0 ml-4 list-decimal space-y-0 leading-tight">
+                          {children}
+                        </ol>
+                      ),
+                      li: ({ children }) => (
+                        <li className="ml-2 leading-tight">{children}</li>
+                      ),
+                      h1: ({ children }) => (
+                        <h1 className="m-0 text-xl font-bold">
+                          {children}
+                        </h1>
+                      ),
+                      h2: ({ children }) => (
+                        <h2 className="m-0 text-lg font-bold">
+                          {children}
+                        </h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3 className="m-0 text-base font-semibold">
+                          {children}
+                        </h3>
+                      ),
+                      code: ({ children, className, ...props }) => {
+                        const match = /language-(\w+)/.exec(className || "");
+                        const language = match ? match[1] : "";
+                        const isInline = !className || !language;
+                        
+                        if (isInline) {
+                          return (
+                            <code className="rounded bg-gray-700/50 px-1 py-0.5 text-sm font-mono">
+                              {children}
+                            </code>
+                          );
+                        }
+                        
+                        // For code blocks with language, render SyntaxHighlighter directly
+                        // ReactMarkdown will wrap this in <pre>, so we handle that in pre component
+                        return (
+                          <code className={className} {...props}>
+                            {children}
+                          </code>
+                        );
+                      },
+                      pre: ({ children, ...props }) => {
+                        // ReactMarkdown wraps code blocks in <pre><code className="language-xxx">
+                        const childArray = React.Children.toArray(children);
+                        // Find code element - ReactMarkdown passes code blocks with className containing "language-"
+                        const codeChild = childArray.find(
+                          (child) => {
+                            if (!React.isValidElement(child)) return false;
+                            const props = child.props as { className?: string; node?: any };
+                            // Check if it has a language- className (code blocks) or is a code element
+                            return /language-/.test(props.className || "") || child.type === "code" || String(child.type) === "code";
+                          }
+                        ) as React.ReactElement<{ className?: string; children?: React.ReactNode; node?: any }> | undefined;
+                        
+                        if (codeChild) {
+                          const codeProps = codeChild.props as { className?: string; children?: React.ReactNode; node?: any };
+                          const match = /language-(\w+)/.exec(codeProps.className || "");
+                          const language = match ? match[1] : "";
+                          
+                          if (language) {
+                            // ReactMarkdown passes content via 'node.value' or 'children'
+                            const codeContent = codeProps.children 
+                              ? String(codeProps.children).replace(/\n$/, "")
+                              : (codeProps.node?.value || "").replace(/\n$/, "");
+                            return (
+                              <SyntaxHighlighter
+                                language={language}
+                                style={vscDarkPlus}
+                                PreTag="div"
+                                className="m-0 rounded-lg"
+                                customStyle={{
+                                  margin: 0,
+                                  padding: "0.75rem",
+                                  background: "rgba(17, 24, 39, 0.5)",
+                                }}
+                              >
+                                {codeContent}
+                              </SyntaxHighlighter>
+                            );
+                          }
+                        }
+                        
+                        return (
+                          <pre className="m-0 overflow-x-auto rounded-lg bg-gray-900/50 p-3" {...props}>
+                            {children}
+                          </pre>
+                        );
+                      },
+                      blockquote: ({ children }) => (
+                        <blockquote className="m-0 border-l-4 border-gray-600 pl-4 italic">
+                          {children}
+                        </blockquote>
+                      ),
+                      hr: () => (
+                        <hr className="m-0 border-gray-700" />
+                      ),
+                    }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                  </div>
                 ) : (
                   <div className="flex items-center space-x-1.5 py-1">
                     <div className="h-2 w-2 animate-pulse rounded-full bg-current [animation-delay:0ms]" />

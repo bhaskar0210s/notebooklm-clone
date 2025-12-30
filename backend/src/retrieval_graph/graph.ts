@@ -10,7 +10,7 @@ import { RunnableConfig } from "@langchain/core/runnables";
 import { loadChatModel } from "../lib/model-loader.js";
 
 // Constants
-const DEFAULT_QUERY_MODEL = "ollama/llama3.2:3b";
+const DEFAULT_QUERY_MODEL = "ollama/qwen3:4b"; // "ollama/llama3.2:3b";
 const GRAPH_RUN_NAME = "RetrievalGraph";
 
 // Configuration type for better type safety
