@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { getServerLangGraphClient } from "@/lib/langgraph";
+import { getServerLangGraphClient } from "@/lib/langgraph.ts";
 import {
   retrievalAssistantConfig,
   retrievalAssistantId,
-} from "@/constants/graphConfigs";
-import { SSE_CONSTANTS } from "@/constants/api";
-import type { ChatApiRequest, ChatApiError } from "@/types/chat";
+} from "@/constants/graphConfigs.ts";
+import { SSE_CONSTANTS } from "@/constants/api.ts";
+import type { ChatApiRequest, ChatApiError } from "@/types/chat.ts";
 
 export const runtime = "edge";
 

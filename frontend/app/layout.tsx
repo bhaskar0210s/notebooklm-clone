@@ -1,4 +1,4 @@
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/toaster.tsx";
 import { ReactNode } from "react";
 import "./globals.css";
 

@@ -1,6 +1,6 @@
 // app/api/upload/route.ts
-import { indexConfig } from "@/constants/graphConfigs";
-import { getServerLangGraphClient } from "@/lib/langgraph";
+import { indexConfig } from "@/constants/graphConfigs.ts";
+import { getServerLangGraphClient } from "@/lib/langgraph.ts";
 import { NextRequest, NextResponse } from "next/server";
 
 // Configuration constants - 2MB limit as per notes.md

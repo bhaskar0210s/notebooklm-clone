@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, forwardRef, useImperativeHandle } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button.tsx";
+import { Input } from "@/components/ui/input.tsx";
 import { ArrowUpIcon, PaperClipIcon } from "@heroicons/react/24/outline";
 import { StopIcon } from "@heroicons/react/24/solid";
 

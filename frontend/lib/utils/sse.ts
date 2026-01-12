@@ -7,8 +7,8 @@ import type {
   SSEMessagePayload,
   ContentPart,
   SSEErrorData,
-} from "@/types/chat";
-import { SSE_CONSTANTS } from "@/constants/api";
+} from "@/types/chat.ts";
+import { SSE_CONSTANTS } from "@/constants/api.ts";
 
 /**
  * Extracts text content from various message content formats.

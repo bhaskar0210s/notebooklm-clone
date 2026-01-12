@@ -3,7 +3,9 @@ import { Client } from "@langchain/langgraph-sdk";
 let browserClientInstance: Client | null = null;
 let serverClientInstance: Client | null = null;
 
-const apiUrl = "http://localhost:2024";
+// Use environment variable for API URL, fallback to localhost for development
+const apiUrl =
+  process.env.NEXT_PUBLIC_LANGGRAPH_API_URL || "http://localhost:2024";
 
 /**
  * Returns a singleton LangGraph client for browser use.

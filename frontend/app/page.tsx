@@ -1,12 +1,12 @@
 "use client";
 
 import { useRef, useEffect, useState, useCallback } from "react";
-import { MessageInput, type MessageInputRef } from "@/components/MessageInput";
-import { Messages } from "@/components/Messages";
-import { FilePreview } from "@/components/file-preview";
-import { useChat } from "@/hooks/useChat";
+import { MessageInput, type MessageInputRef } from "@/components/MessageInput.tsx";
+import { Messages } from "@/components/Messages.tsx";
+import { FilePreview } from "@/components/file-preview.tsx";
+import { useChat } from "@/hooks/useChat.ts";
 import { PlusIcon } from "@heroicons/react/24/outline";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/button.tsx";
 import { toast } from "sonner";
 
 export default function Home() {

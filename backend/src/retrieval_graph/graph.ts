@@ -9,12 +9,12 @@ import { HumanMessage } from "@langchain/core/messages";
 import { Document } from "@langchain/core/documents";
 import { RunnableConfig } from "@langchain/core/runnables";
 import { z } from "zod";
-import { loadChatModel } from "../lib/model-loader.js";
-import { makeRetriever } from "../shared/retrieval.js";
-import { formatDocs } from "./utils.js";
-import { reduceDocs } from "../shared/state.js";
-import { BaseConfigurationAnnotation } from "../shared/configuration.js";
-import { ROUTER_SYSTEM_PROMPT, RESPONSE_SYSTEM_PROMPT } from "./prompts.js";
+import { loadChatModel } from "../lib/model-loader.ts";
+import { makeRetriever } from "../shared/retrieval.ts";
+import { formatDocs } from "./utils.ts";
+import { reduceDocs } from "../shared/state.ts";
+import { BaseConfigurationAnnotation } from "../shared/configuration.ts";
+import { ROUTER_SYSTEM_PROMPT, RESPONSE_SYSTEM_PROMPT } from "./prompts.ts";
 
 // Constants
 const DEFAULT_QUERY_MODEL = "ollama/llama3.2:1b"; // "ollama/qwen3:4b"; // "ollama/llama3.2:3b";

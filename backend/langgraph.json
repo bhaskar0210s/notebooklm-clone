@@ -4,6 +4,5 @@
     "upload_graph": "./src/upload_graph/graph.ts:graph",
     "retrieval_graph": "./src/retrieval_graph/graph.ts:graph"
   },
-  "env": ".env",
   "dependencies": ["."]
 }

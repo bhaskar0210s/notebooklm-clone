@@ -6,12 +6,12 @@ import { StateGraph, START, END, Annotation } from "@langchain/langgraph";
 import { Document } from "@langchain/core/documents";
 import { RunnableConfig } from "@langchain/core/runnables";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { makeRetriever } from "../shared/retrieval.js";
+import { makeRetriever } from "../shared/retrieval.ts";
 import {
   BaseConfigurationAnnotation,
   ensureBaseConfiguration,
-} from "../shared/configuration.js";
-import { processPDFFromBase64, type PDFFileData } from "../shared/pdf.js";
+} from "../shared/configuration.ts";
+import { processPDFFromBase64, type PDFFileData } from "../shared/pdf.ts";
 
 // Constants
 const GRAPH_RUN_NAME = "uploadionGraph";

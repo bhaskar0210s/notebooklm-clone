@@ -6,7 +6,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { toast } from "sonner";
 import { DocumentDuplicateIcon, CheckIcon } from "@heroicons/react/24/outline";
-import type { Message } from "@/types/chat";
+import type { Message } from "@/types/chat.ts";
 
 interface MessagesProps {
   messages: Message[];

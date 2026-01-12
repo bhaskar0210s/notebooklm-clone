@@ -6,7 +6,12 @@ import { RunnableConfig } from "@langchain/core/runnables";
 import {
   BaseConfigurationAnnotation,
   ensureBaseConfiguration,
-} from "./configuration.js";
+} from "./configuration.ts";
+
+// Get Ollama base URL from environment variable, default to localhost for local development
+const getOllamaBaseUrl = (): string => {
+  return process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+};
 
 export async function makeSupabaseRetriever(
   configuration: typeof BaseConfigurationAnnotation.State
@@ -18,7 +23,7 @@ export async function makeSupabaseRetriever(
   }
   const embeddings = new OllamaEmbeddings({
     model: "nomic-embed-text:latest",
-    baseUrl: "http://localhost:11434",
+    baseUrl: getOllamaBaseUrl(),
   });
   const supabaseClient = createClient(
     process.env.SUPABASE_URL ?? "",

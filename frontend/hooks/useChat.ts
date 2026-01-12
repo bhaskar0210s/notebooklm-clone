@@ -2,16 +2,16 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { getLangGraphClient } from "@/lib/langgraph";
-import { retrievalAssistantId } from "@/constants/graphConfigs";
-import { API_ENDPOINTS, ERROR_MESSAGES } from "@/constants/api";
-import type { Message, ConnectionStatus } from "@/types/chat";
+import { getLangGraphClient } from "@/lib/langgraph.ts";
+import { retrievalAssistantId } from "@/constants/graphConfigs.ts";
+import { API_ENDPOINTS, ERROR_MESSAGES } from "@/constants/api.ts";
+import type { Message, ConnectionStatus } from "@/types/chat.ts";
 import {
   parseSSEChunk,
   isSSEErrorEvent,
   readSSEStream,
   isSSEInterruptedErrorEvent,
-} from "@/lib/utils/sse";
+} from "@/lib/utils/sse.ts";
 
 interface UseChatReturn {
   messages: Message[];
