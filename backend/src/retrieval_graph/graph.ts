@@ -77,6 +77,7 @@ async function checkQueryType(
       .invoke(formattedPrompt.toString());
 
     const route = response.route;
+    console.log(`[Retrieval Graph] Route decision: ${route}`);
     return { route };
   } catch (error) {
     // Fallback to retrieval if structured output fails
