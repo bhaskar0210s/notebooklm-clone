@@ -16,8 +16,18 @@ import { reduceDocs } from "../shared/state.ts";
 import { BaseConfigurationAnnotation } from "../shared/configuration.ts";
 import { ROUTER_SYSTEM_PROMPT, RESPONSE_SYSTEM_PROMPT } from "./prompts.ts";
 
+// Get default model based on USE_OLLAMA environment variable
+const getDefaultQueryModel = (): string => {
+  const useOllama = process.env.USE_OLLAMA === "true";
+  if (useOllama) {
+    return "ollama/llama3.2:1b";
+  } else {
+    return "vertexai/gemini-2.5-flash-lite";
+  }
+};
+
 // Constants
-const DEFAULT_QUERY_MODEL = "ollama/llama3.2:1b"; // "ollama/qwen3:4b"; // "ollama/llama3.2:3b";
+const DEFAULT_QUERY_MODEL = getDefaultQueryModel();
 const GRAPH_RUN_NAME = "RetrievalGraph";
 
 // Configuration type for better type safety
@@ -63,6 +73,7 @@ async function checkQueryType(
 
   const configurable = (config?.configurable || {}) as Partial<RetrievalConfig>;
   const queryModel = configurable.queryModel || DEFAULT_QUERY_MODEL;
+  console.log(`[Retrieval Graph] Query model: ${queryModel}`);
   const model = await loadChatModel(queryModel, 0.1);
 
   const routingPrompt = ROUTER_SYSTEM_PROMPT;
@@ -126,7 +137,11 @@ async function retrieveDocuments(
   config: RunnableConfig
 ): Promise<typeof RetrievalState.Update> {
   const retriever = await makeRetriever(config);
+  console.log(
+    `[Retrieval Graph] Retrieving documents for query: "${state.query}"`
+  );
   const response = await retriever.invoke(state.query);
+  console.log(`[Retrieval Graph] Retrieved ${response.length} document(s)`);
 
   return { documents: response };
 }
@@ -146,6 +161,8 @@ async function generateResponse(
     context: context,
   });
 
+  console.log(`[Retrieval Graph] Prompt value: ${promptValue.toString()}`);
+
   // Convert ChatPromptValue to messages array
   const promptMessages = promptValue.toChatMessages();
 
@@ -154,6 +171,7 @@ async function generateResponse(
 
   // Invoke model and let MessagesAnnotation handle the response
   const response = await model.invoke(messageHistory);
+  console.log(`[Retrieval Graph] Response: ${response.content}`);
 
   return { messages: [response] };
 }

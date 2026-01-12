@@ -15,7 +15,7 @@ interface MessagesProps {
 }
 
 const EXAMPLE_PROMPTS = [
-  "What are the main topics discussed in the documents?",
+  "What can you tell me about this document?",
   "Explain photosynthesis🍀",
 ];
 

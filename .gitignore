@@ -3,3 +3,6 @@
 
 # Environment variables (root level)
 .env
+
+# JSON files
+*.json
