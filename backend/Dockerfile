@@ -3,6 +3,9 @@
 
 FROM node:22-slim
 
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copy package files
@@ -17,13 +20,15 @@ RUN npm ci
 COPY tsconfig.json ./
 COPY src/ ./src/
 
-# Expose the port that LangGraph CLI uses
-EXPOSE 2024
+# Copy start script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
 
-# Set environment variable for port
-ENV PORT=2024
+# Expose port (Cloud Run will set PORT env var, default to 8080)
+EXPOSE 8080
 
-# Run LangGraph CLI dev server
-# --host 0.0.0.0 allows external connections
-# --port uses the PORT env var
-CMD ["npx", "@langchain/langgraph-cli", "dev", "--host", "0.0.0.0", "--port", "2024"]
+# Cloud Run sets PORT automatically, so we don't set it here
+# The start.sh script will read PORT from environment
+
+# Run start script which reads PORT from Cloud Run
+CMD ["/app/start.sh"]
