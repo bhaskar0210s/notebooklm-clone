@@ -1,5 +1,5 @@
 export const retrievalAssistantConfig = {
-  queryModel: "vertexai/gemini-2.5-flash-lite",
+  queryModel: "vertexai/gemini-2.5-flash",
   // Ollama alternatives (use when USE_OLLAMA=true):
   // queryModel: "ollama/llama3.1:8b",
   // queryModel: "ollama/gemma3:12b",

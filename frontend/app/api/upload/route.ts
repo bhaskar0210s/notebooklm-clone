@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
     // Run the upload graph
     const client = getServerLangGraphClient();
     const thread = await client.threads.create({});
-    await client.runs.create(thread.thread_id, "upload_graph", {
+    const run = await client.runs.create(thread.thread_id, "upload_graph", {
       input: {
         pdfFile,
       },
@@ -141,9 +141,54 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Poll for run completion using runs.get() (correct API for checking existing run status)
+    let finalStatus: string = run.status;
+    let attempts = 0;
+    const maxAttempts = 300; // 5 minutes max (1 second per attempt)
+
+    while (finalStatus === "pending" || finalStatus === "running") {
+      if (attempts >= maxAttempts) {
+        throw new Error("Upload timeout: The upload is taking too long");
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1 second
+      try {
+        const runStatus = await client.runs.get(thread.thread_id, run.run_id);
+        finalStatus = runStatus.status || finalStatus;
+        attempts++;
+
+        if (
+          finalStatus === "success" ||
+          finalStatus === "failed" ||
+          finalStatus === "cancelled"
+        ) {
+          break;
+        }
+      } catch (pollError: any) {
+        // If we can't get status, wait a bit and retry
+        attempts++;
+        if (attempts >= maxAttempts) {
+          throw new Error(
+            `Failed to get run status: ${pollError || "Unknown error"}`,
+          );
+        }
+      }
+    }
+
+    if (finalStatus === "failed") {
+      throw new Error("The upload graph failed to process the document");
+    } else if (finalStatus === "cancelled") {
+      throw new Error("The upload was cancelled");
+    } else if (finalStatus !== "success") {
+      throw new Error(
+        `Upload did not complete successfully. Status: ${finalStatus}`,
+      );
+    }
+
     return NextResponse.json({
       message: "Document uploaded successfully",
       threadId: thread.thread_id,
+      runId: run.run_id,
     });
   } catch (error: any) {
     return createErrorResponse(

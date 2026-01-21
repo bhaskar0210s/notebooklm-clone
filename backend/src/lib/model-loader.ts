@@ -18,7 +18,7 @@ const getOllamaBaseUrl = (): string => {
  * Load a chat model from a fully specified name.
  * Supports both Ollama and Vertex AI providers based on USE_OLLAMA environment variable.
  * @param fullySpecifiedName - String in the format 'provider/model' or 'provider/account/provider/model'.
- *   For Vertex AI: 'vertexai/gemini-2.5-flash-lite' or 'gemini-2.5-flash-lite'
+ *   For Vertex AI: 'vertexai/gemini-2.5-flash' or 'gemini-2.5-flash'
  *   For Ollama: 'ollama/llama3.2:1b' or 'ollama/model-name'
  * @returns A Promise that resolves to a BaseChatModel instance.
  */

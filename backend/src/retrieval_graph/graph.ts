@@ -22,7 +22,7 @@ const getDefaultQueryModel = (): string => {
   if (useOllama) {
     return "ollama/llama3.2:1b";
   } else {
-    return "vertexai/gemini-2.5-flash-lite";
+    return "vertexai/gemini-2.5-flash";
   }
 };
 
@@ -91,6 +91,7 @@ async function checkQueryType(
     console.log(`[Retrieval Graph] Route decision: ${route}`);
     return { route };
   } catch (error) {
+    console.error(`[Retrieval Graph] Error: ${error}`);
     // Fallback to retrieval if structured output fails
     return { route: "retrieve" };
   }
