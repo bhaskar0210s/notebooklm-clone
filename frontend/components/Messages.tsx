@@ -17,6 +17,7 @@ interface MessagesProps {
 const EXAMPLE_PROMPTS = [
   "What can you tell me about this document?",
   "Explain photosynthesis🍀",
+  "How does gravity work?"
 ];
 
 export function Messages({ messages, isLoading, onExamplePromptClick }: MessagesProps) {

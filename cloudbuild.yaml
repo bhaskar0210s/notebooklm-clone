@@ -52,7 +52,7 @@ steps:
       - '--concurrency'
       - '80'
       - '--set-secrets'
-      - 'SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_ROLE_KEY=supabase-service-role-key:latest,GOOGLE_APPLICATION_CREDENTIALS=google-application-credentials:latest'
+      - 'SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_ROLE_KEY=supabase-service-role-key:latest'
       - '--set-env-vars'
       - 'GOOGLE_CLOUD_PROJECT_ID=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_REGION},USE_OLLAMA=false'
       - '--service-account'
