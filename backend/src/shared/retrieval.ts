@@ -36,7 +36,7 @@ function createEmbeddings(): Embeddings {
       model: "gemini-embedding-001",
       project: process.env.GOOGLE_CLOUD_PROJECT_ID,
       location: process.env.GOOGLE_CLOUD_LOCATION || "asia-south1",
-      outputDimensionality: 768,
+      dimensions: 768,
     } as any) as unknown as Embeddings;
   }
 }

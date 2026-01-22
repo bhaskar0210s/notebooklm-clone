@@ -1,10 +1,11 @@
-#!/bin/sh
+#!/usr/bin/env sh
 
-# Load environment variables from project root .env file
-# This mimics how Docker Compose loads env vars in production
 if [ -f "../.env" ]; then
-  export $(grep -v '^#' ../.env | xargs)
+    set -a
+    . ../.env
+    set +a
+else
+    echo "Note: ../.env file not found" >&2
 fi
 
-# Start LangGraph CLI dev server
 exec npx @langchain/langgraph-cli dev --no-browser

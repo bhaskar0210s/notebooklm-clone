@@ -14,7 +14,6 @@ services:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434}
       - GOOGLE_CLOUD_PROJECT_ID=${GOOGLE_CLOUD_PROJECT_ID}
       - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-asia-south1}
-      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
     volumes:
       # Mount source code for development (optional - remove for production)
       - ./backend/src:/app/src

@@ -144,14 +144,17 @@ export async function POST(request: NextRequest) {
     // Poll for run completion using runs.get() (correct API for checking existing run status)
     let finalStatus: string = run.status;
     let attempts = 0;
-    const maxAttempts = 300; // 5 minutes max (1 second per attempt)
+    const maxAttempts = 150; // 5 minutes max (2 seconds per attempt)
+    const POLL_INTERVAL_MS = 2000; // 2 seconds between polls
+
+    // Wait before first poll to avoid immediate request
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
 
     while (finalStatus === "pending" || finalStatus === "running") {
       if (attempts >= maxAttempts) {
         throw new Error("Upload timeout: The upload is taking too long");
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1 second
       try {
         const runStatus = await client.runs.get(thread.thread_id, run.run_id);
         finalStatus = runStatus.status || finalStatus;
@@ -172,6 +175,11 @@ export async function POST(request: NextRequest) {
             `Failed to get run status: ${pollError || "Unknown error"}`,
           );
         }
+      }
+
+      // Wait before next poll (only if still pending/running)
+      if (finalStatus === "pending" || finalStatus === "running") {
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
       }
     }
 

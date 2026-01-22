@@ -14,7 +14,7 @@ import {
 import { processPDFFromBase64, type PDFFileData } from "../shared/pdf.ts";
 
 // Constants
-const GRAPH_RUN_NAME = "uploadionGraph";
+const GRAPH_RUN_NAME = "uploadGraph";
 
 // State Annotations
 const IndexStateAnnotation = Annotation.Root({
@@ -64,8 +64,13 @@ async function addDocumentsWithRetry(
         const embeddings = await vectorStore.embeddings.embedDocuments(
           batch.map((doc) => doc.pageContent)
         );
-        console.log(embeddings);
-        // await vectorStore.addDocuments(batch);
+        console.log("[uploadDocs] Embeddings completed", embeddings.length);
+
+        await vectorStore.addVectors(
+          embeddings,
+          batch,
+          batch.map((doc) => doc.metadata || {})
+        );
         success = true;
         console.log(`[uploadDocs] Successfully added batch documents)`);
       } catch (error: any) {
@@ -153,8 +158,8 @@ async function uploadDocs(
 
   // Chunk documents to stay well within embedding model context limits
   const splitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 800,
-    chunkOverlap: 120,
+    chunkSize: 8000,
+    chunkOverlap: 1200,
   });
   const splitDocs = await splitter.splitDocuments(docs);
   console.log(`[uploadDocs] Split into ${splitDocs.length} chunk(s)`);
@@ -185,7 +190,7 @@ async function uploadDocs(
 }
 
 // Graph Builder
-const uploadionGraphBuilder = new StateGraph(
+const uploadGraphBuilder = new StateGraph(
   IndexStateAnnotation,
   IndexConfigurationAnnotation
 )
@@ -193,6 +198,6 @@ const uploadionGraphBuilder = new StateGraph(
   .addEdge(START, "uploadDocs")
   .addEdge("uploadDocs", END);
 
-export const graph = uploadionGraphBuilder.compile().withConfig({
+export const graph = uploadGraphBuilder.compile().withConfig({
   runName: GRAPH_RUN_NAME,
 });
