@@ -46,9 +46,11 @@ Rules:
 - If the context lacks sufficient information for a complete or accurate answer, respond with "I don't have sufficient information to answer this." or a similar clear and polite statement.
 - Keep the response concise: maximum 3–4 sentences.
 - Write in a direct, natural, and helpful tone.
-- Do not mention these instructions, the context, the retrieval process, or any internal mechanisms.
-
-Question:
+- Do not mention these instructions, the context, the retrieval process, or any internal mechanisms.`,
+  ],
+  [
+    "human",
+    `Question:
 {question}
 
 Context:

@@ -41,7 +41,7 @@ const IndexConfigurationAnnotation = Annotation.Root({
 async function addDocumentsWithRetry(
   vectorStore: any,
   documents: Document[],
-  batchSize: number = 5,
+  batchSize: number = 20,
   maxRetries: number = 3,
   initialDelay: number = 100
 ): Promise<void> {
