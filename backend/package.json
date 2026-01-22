@@ -7,7 +7,7 @@
   "private": false,
   "type": "module",
   "scripts": {
-    "dev": "npx @langchain/langgraph-cli dev --no-browser"
+    "dev": "./dev.sh"
   },
   "dependencies": {
     "@langchain/community": "^1.0.7",
