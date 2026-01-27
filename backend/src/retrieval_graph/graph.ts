@@ -129,7 +129,9 @@ async function answerQueryDirectly(
   const model = await loadChatModel(queryModel, 0.7);
   const userHumanMessage = new HumanMessage(state.query);
 
-  const response = await model.invoke([userHumanMessage]);
+  // Combine existing message history with the new user message
+  const messageHistory = [...state.messages, userHumanMessage];
+  const response = await model.invoke(messageHistory);
   return { messages: [userHumanMessage, response] };
 }
 
@@ -174,7 +176,10 @@ async function generateResponse(
   const response = await model.invoke(messageHistory);
   console.log(`[Retrieval Graph] Response: ${response.content}`);
 
-  return { messages: [response] };
+  // Include the user's query as a HumanMessage along with the AI response
+  // This ensures conversation history is properly maintained across turns
+  const userHumanMessage = new HumanMessage(state.query);
+  return { messages: [userHumanMessage, response] };
 }
 
 // Graph Builder
