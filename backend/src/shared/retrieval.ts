@@ -1,8 +1,7 @@
 import { VectorStoreRetriever } from "@langchain/core/vectorstores";
 import { Embeddings } from "@langchain/core/embeddings";
 import { OllamaEmbeddings } from "@langchain/ollama";
-// import { VertexAIEmbeddings } from "@langchain/google-vertexai";
-import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
+import { VertexAIEmbeddings } from "@langchain/google-vertexai";
 import { SupabaseVectorStore } from "@langchain/community/vectorstores/supabase";
 import { createClient } from "@supabase/supabase-js";
 import { RunnableConfig } from "@langchain/core/runnables";
@@ -33,20 +32,12 @@ function createEmbeddings(): Embeddings {
       baseUrl: getOllamaBaseUrl(),
     });
   } else {
-    return new GoogleGenerativeAIEmbeddings({
-      modelName: "models/gemini-embedding-001",
+    return new VertexAIEmbeddings({
+      model: "gemini-embedding-001",
       project: process.env.GOOGLE_CLOUD_PROJECT_ID,
       location: process.env.GOOGLE_CLOUD_LOCATION || "asia-south1",
-      vertexai: true,
-      outputDimensionality: 768,
-    } as any);
-
-    // return new VertexAIEmbeddings({
-    //   model: "gemini-embedding-001",
-    //   project: process.env.GOOGLE_CLOUD_PROJECT_ID,
-    //   location: process.env.GOOGLE_CLOUD_LOCATION || "asia-south1",
-    //   dimensions: 768,
-    // } as any) as unknown as Embeddings;
+      dimensions: 768,
+    } as any) as unknown as Embeddings;
   }
 }
 
