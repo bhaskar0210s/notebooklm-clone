@@ -4,17 +4,39 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import { MessageInput, type MessageInputRef } from "@/components/MessageInput.tsx";
 import { Messages } from "@/components/Messages.tsx";
 import { FilePreview } from "@/components/file-preview.tsx";
+import { Sidebar } from "@/components/Sidebar.tsx";
 import { useChat } from "@/hooks/useChat.ts";
-import { PlusIcon } from "@heroicons/react/24/outline";
-import { Button } from "@/components/ui/button.tsx";
+import { useChatHistory } from "@/hooks/useChatHistory.ts";
 import { toast } from "sonner";
 
 export default function Home() {
-  const { messages, input, setInput, isLoading, connectionStatus, handleSubmit, submitMessage, stop, newChat } =
-    useChat();
+  const {
+    messages,
+    input,
+    setInput,
+    isLoading,
+    connectionStatus,
+    threadId,
+    handleSubmit,
+    submitMessage,
+    stop,
+    newChat,
+    loadSession,
+  } = useChat();
+
+  const {
+    chatSessions,
+    currentSessionId,
+    setCurrentSessionId,
+    saveSession,
+    deleteSession,
+    getSession,
+  } = useChatHistory();
+
   const inputRef = useRef<MessageInputRef>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const isConnected = connectionStatus === "connected";
 
@@ -27,6 +49,14 @@ export default function Home() {
       return () => clearTimeout(timeoutId);
     }
   }, [isConnected, isLoading]);
+
+  // Save messages to chat history whenever they change
+  useEffect(() => {
+    if (threadId && messages.length > 0) {
+      saveSession(threadId, messages);
+      setCurrentSessionId(threadId);
+    }
+  }, [threadId, messages, saveSession, setCurrentSessionId]);
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
@@ -73,56 +103,85 @@ export default function Home() {
 
   const handleNewChat = useCallback(async () => {
     await newChat();
+    setCurrentSessionId(null);
     // Focus input after new chat is created
     setTimeout(() => {
       inputRef.current?.focus();
     }, 100);
-  }, [newChat]);
+  }, [newChat, setCurrentSessionId]);
+
+  const handleSelectChat = useCallback(
+    (selectedThreadId: string) => {
+      const session = getSession(selectedThreadId);
+      if (session) {
+        loadSession(session.threadId, session.messages);
+        setCurrentSessionId(session.threadId);
+      }
+    },
+    [getSession, loadSession, setCurrentSessionId]
+  );
+
+  const handleDeleteChat = useCallback(
+    (threadIdToDelete: string) => {
+      deleteSession(threadIdToDelete);
+      // If deleting current chat, start a new one
+      if (currentSessionId === threadIdToDelete) {
+        handleNewChat();
+      }
+      toast.success("Chat deleted");
+    },
+    [deleteSession, currentSessionId, handleNewChat]
+  );
+
+  const toggleSidebar = useCallback(() => {
+    setIsSidebarOpen((prev) => !prev);
+  }, []);
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center p-4 pb-32 md:p-8 md:pb-36">
-      {/* New Chat Button - Top Left */}
-      <div className="fixed top-4 left-4 z-20 md:top-6 md:left-6">
-        <Button
-          onClick={handleNewChat}
-          className="flex items-center gap-2 rounded-xl border border-gray-700/50 bg-gray-800/80 px-4 py-2.5 text-sm font-medium text-gray-300 shadow-lg backdrop-blur-sm transition-all hover:border-gray-600/50 hover:bg-gray-800 hover:text-white"
-          aria-label="New Chat"
-        >
-          <PlusIcon className="h-4 w-4" />
-          <span className="hidden sm:inline">New Chat</span>
-        </Button>
-      </div>
+    <>
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onToggle={toggleSidebar}
+        chatSessions={chatSessions}
+        currentSessionId={currentSessionId}
+        onNewChat={handleNewChat}
+        onSelectChat={handleSelectChat}
+        onDeleteChat={handleDeleteChat}
+      />
 
-      <div className="w-full flex-1">
-        <Messages messages={messages} isLoading={isLoading} onExamplePromptClick={submitMessage} />
-      </div>
-
-      <div className="fixed bottom-0 left-0 right-0 z-10 bg-linear-to-t from-gray-950 via-gray-950/95 to-transparent pb-6 pt-12">
-        <div className="mx-auto max-w-4xl px-4 space-y-4">
-          {files.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-              {files.map((file, index) => (
-                <FilePreview
-                  key={`${file.name}-${index}`}
-                  file={file}
-                  onRemove={() => handleRemoveFile(file)}
-                />
-              ))}
-            </div>
-          )}
-          <MessageInput
-            ref={inputRef}
-            value={input}
-            onChange={setInput}
-            onSubmit={handleSubmit}
-            onStop={stop}
-            onFileUpload={handleFileUpload}
-            isLoading={isLoading}
-            isUploading={isUploading}
-            disabled={!isConnected}
-          />
+      <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center p-4 pb-32 md:p-8 md:pb-36">
+        <div className="w-full flex-1">
+          <Messages messages={messages} isLoading={isLoading} onExamplePromptClick={submitMessage} />
         </div>
-      </div>
-    </main>
+
+        <div className="fixed bottom-0 left-0 right-0 z-10 bg-linear-to-t from-gray-950 via-gray-950/95 to-transparent pb-6 pt-12">
+          <div className="mx-auto max-w-4xl px-4 space-y-4">
+            {files.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                {files.map((file, index) => (
+                  <FilePreview
+                    key={`${file.name}-${index}`}
+                    file={file}
+                    onRemove={() => handleRemoveFile(file)}
+                  />
+                ))}
+              </div>
+            )}
+            <MessageInput
+              ref={inputRef}
+              value={input}
+              onChange={setInput}
+              onSubmit={handleSubmit}
+              onStop={stop}
+              onFileUpload={handleFileUpload}
+              isLoading={isLoading}
+              isUploading={isUploading}
+              disabled={!isConnected}
+            />
+          </div>
+        </div>
+      </main>
+    </>
   );
 }
+

@@ -54,3 +54,11 @@ export interface ChatApiRequest {
 export interface ChatApiError {
   error: string;
 }
+
+export interface ChatSession {
+  threadId: string;
+  title: string;
+  messages: Message[];
+  createdAt: number;
+  updatedAt: number;
+}

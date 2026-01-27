@@ -19,10 +19,12 @@ interface UseChatReturn {
   setInput: (inputValue: string) => void;
   isLoading: boolean;
   connectionStatus: ConnectionStatus;
+  threadId: string | null;
   handleSubmit: (event: React.FormEvent) => Promise<void>;
   submitMessage: (messageText: string) => Promise<void>;
   stop: () => Promise<void>;
   newChat: () => Promise<void>;
+  loadSession: (sessionThreadId: string, sessionMessages: Message[]) => void;
 }
 
 /**
@@ -262,15 +264,29 @@ export function useChat(): UseChatReturn {
     }
   }, [stop]);
 
+  const loadSession = useCallback((sessionThreadId: string, sessionMessages: Message[]) => {
+    // Stop any ongoing stream
+    currentRunIdRef.current = null;
+    setIsLoading(false);
+    
+    // Load the session
+    setThreadId(sessionThreadId);
+    setMessages(sessionMessages);
+    setInput("");
+    setConnectionStatus("connected");
+  }, []);
+
   return {
     messages,
     input,
     setInput,
     isLoading,
     connectionStatus,
+    threadId,
     handleSubmit,
     submitMessage,
     stop,
     newChat,
+    loadSession,
   };
 }
