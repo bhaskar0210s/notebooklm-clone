@@ -5,13 +5,18 @@ import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { toast } from "sonner";
-import { DocumentDuplicateIcon, CheckIcon } from "@heroicons/react/24/outline";
+import {
+  DocumentDuplicateIcon,
+  CheckIcon,
+  ArrowPathIcon,
+} from "@heroicons/react/24/outline";
 import type { Message } from "@/types/chat.ts";
 
 interface MessagesProps {
   messages: Message[];
   isLoading: boolean;
   onExamplePromptClick?: (prompt: string) => void;
+  onRetry?: () => void;
 }
 
 const EXAMPLE_PROMPTS = [
@@ -20,7 +25,12 @@ const EXAMPLE_PROMPTS = [
   "How does gravity work?"
 ];
 
-export function Messages({ messages, isLoading, onExamplePromptClick }: MessagesProps) {
+export function Messages({
+  messages,
+  isLoading,
+  onExamplePromptClick,
+  onRetry,
+}: MessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const lastScrollTopRef = useRef<number>(0);
@@ -309,12 +319,25 @@ export function Messages({ messages, isLoading, onExamplePromptClick }: Messages
                 )}
               </div>
             </div>
-            {/* Copy button - appears below message on hover */}
+            {/* Copy and Retry buttons - appear below message on hover */}
             <div
-              className={`mt-1 flex transition-opacity opacity-0 group-hover:opacity-100 ${
+              className={`mt-1 flex items-center gap-1 transition-opacity opacity-0 group-hover:opacity-100 ${
                 message.role === "user" ? "justify-end" : "justify-start"
               }`}
             >
+              {message.role === "assistant" &&
+                messageIndex === messages.length - 1 &&
+                onRetry &&
+                !isLoading && (
+                  <button
+                    onClick={onRetry}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:text-gray-400"
+                    title="Retry"
+                    aria-label="Retry response"
+                  >
+                    <ArrowPathIcon className="h-3.5 w-3.5" />
+                  </button>
+                )}
               <button
                 onClick={() => copyToClipboard(message.content, messageIndex)}
                 className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${

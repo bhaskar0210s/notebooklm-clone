@@ -22,6 +22,7 @@ interface UseChatReturn {
   threadId: string | null;
   handleSubmit: (event: React.FormEvent) => Promise<void>;
   submitMessage: (messageText: string) => Promise<void>;
+  retryLastMessage: () => Promise<void>;
   stop: () => Promise<void>;
   newChat: () => Promise<void>;
   loadSession: (sessionThreadId: string, sessionMessages: Message[]) => void;
@@ -218,6 +219,29 @@ export function useChat(): UseChatReturn {
     [input, submitMessage],
   );
 
+  const retryLastMessage = useCallback(async () => {
+    const lastUserIndex = messages.findLastIndex((m) => m.role === "user");
+    if (lastUserIndex === -1 || isLoading) return;
+
+    const lastUserMessage = messages[lastUserIndex];
+    if (!lastUserMessage?.content?.trim()) return;
+
+    if (connectionStatus !== "connected" || !threadId) {
+      toast.info(ERROR_MESSAGES.BACKEND_NOT_READY);
+      return;
+    }
+
+    // Remove the last user message and its assistant response
+    setMessages((prev) => prev.slice(0, lastUserIndex));
+    await submitMessage(lastUserMessage.content);
+  }, [
+    messages,
+    isLoading,
+    connectionStatus,
+    threadId,
+    submitMessage,
+  ]);
+
   const stop = useCallback(async () => {
     // Cancel the run on the backend if we have a run_id
     if (currentRunIdRef.current && threadId) {
@@ -285,6 +309,7 @@ export function useChat(): UseChatReturn {
     threadId,
     handleSubmit,
     submitMessage,
+    retryLastMessage,
     stop,
     newChat,
     loadSession,
