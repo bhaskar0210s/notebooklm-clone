@@ -20,6 +20,9 @@ const getOllamaBaseUrl = (): string => {
   return process.env.OLLAMA_BASE_URL || "http://localhost:11434";
 };
 
+// Default Ollama embedding model when USE_OLLAMA=true
+const DEFAULT_OLLAMA_EMBEDDING_MODEL = "nomic-embed-text:latest";
+
 /**
  * Create embeddings instance based on USE_OLLAMA environment variable
  */
@@ -28,7 +31,7 @@ function createEmbeddings(): Embeddings {
 
   if (useOllama) {
     return new OllamaEmbeddings({
-      model: "nomic-embed-text:latest",
+      model: DEFAULT_OLLAMA_EMBEDDING_MODEL,
       baseUrl: getOllamaBaseUrl(),
     });
   } else {

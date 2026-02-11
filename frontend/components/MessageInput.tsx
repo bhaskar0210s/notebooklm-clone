@@ -3,7 +3,7 @@
 import { useRef, forwardRef, useImperativeHandle } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
-import { ArrowUpIcon, PaperClipIcon } from "@heroicons/react/24/outline";
+import { ArrowUpIcon, PaperClipIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { StopIcon } from "@heroicons/react/24/solid";
 
 interface MessageInputProps {
@@ -15,6 +15,8 @@ interface MessageInputProps {
   isLoading?: boolean;
   isUploading?: boolean;
   disabled?: boolean;
+  isEditing?: boolean;
+  onCancelEdit?: () => void;
 }
 
 export interface MessageInputRef {
@@ -22,7 +24,7 @@ export interface MessageInputRef {
 }
 
 export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
-  ({ value, onChange, onSubmit, onStop, onFileUpload, isLoading = false, isUploading = false, disabled = false }, ref) => {
+  ({ value, onChange, onSubmit, onStop, onFileUpload, isLoading = false, isUploading = false, disabled = false, isEditing = false, onCancelEdit }, ref) => {
     const inputRef = useRef<HTMLInputElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -54,6 +56,18 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           className="hidden"
         />
         <div className="flex items-center gap-3 overflow-hidden rounded-2xl border border-gray-700/50 bg-gray-800/80 px-5 py-3.5 shadow-xl backdrop-blur-sm transition-all hover:border-gray-600/50 focus-within:border-blue-500/50 focus-within:ring-2 focus-within:ring-blue-500/20">
+          {isEditing && onCancelEdit && (
+            <Button
+              type="button"
+              onClick={onCancelEdit}
+              disabled={disabled}
+              className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-2.5 text-xs text-gray-400 transition-colors hover:bg-gray-700/50 hover:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Cancel edit"
+            >
+              <XMarkIcon className="h-3.5 w-3.5" />
+              Cancel
+            </Button>
+          )}
           <Button
             type="button"
             onClick={handleFileButtonClick}
@@ -72,7 +86,13 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             type="text"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder={isUploading ? "Uploading PDF..." : "Ask anything..."}
+            placeholder={
+              isUploading
+                ? "Uploading PDF..."
+                : isEditing
+                  ? "Edit your message..."
+                  : "Ask anything..."
+            }
             disabled={disabled || isUploading}
             className="h-auto flex-1 bg-transparent text-base text-white placeholder:text-gray-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
           />

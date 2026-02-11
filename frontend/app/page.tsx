@@ -11,6 +11,15 @@ import { toast } from "sonner";
 
 export default function Home() {
   const {
+    chatSessions,
+    currentSessionId,
+    setCurrentSessionId,
+    saveSession,
+    deleteSession,
+    getSession,
+  } = useChatHistory();
+
+  const {
     messages,
     input,
     setInput,
@@ -20,24 +29,17 @@ export default function Home() {
     handleSubmit,
     submitMessage,
     retryLastMessage,
+    editAndResubmitMessage,
     stop,
     newChat,
     loadSession,
   } = useChat();
 
-  const {
-    chatSessions,
-    currentSessionId,
-    setCurrentSessionId,
-    saveSession,
-    deleteSession,
-    getSession,
-  } = useChatHistory();
-
   const inputRef = useRef<MessageInputRef>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
 
   const isConnected = connectionStatus === "connected";
 
@@ -103,6 +105,7 @@ export default function Home() {
   }, []);
 
   const handleNewChat = useCallback(async () => {
+    setEditingMessageIndex(null);
     await newChat();
     setCurrentSessionId(null);
     // Focus input after new chat is created
@@ -113,6 +116,7 @@ export default function Home() {
 
   const handleSelectChat = useCallback(
     (selectedThreadId: string) => {
+      setEditingMessageIndex(null);
       const session = getSession(selectedThreadId);
       if (session) {
         loadSession(session.threadId, session.messages);
@@ -138,6 +142,27 @@ export default function Home() {
     setIsSidebarOpen((prev) => !prev);
   }, []);
 
+  const handleEditPrompt = (messageIndex: number, content: string) => {
+    setInput(content);
+    setEditingMessageIndex(messageIndex);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  const handleCancelEdit = () => {
+    setInput("");
+    setEditingMessageIndex(null);
+  };
+
+  const handleSubmitWithEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingMessageIndex !== null) {
+      await editAndResubmitMessage(editingMessageIndex, input);
+      setEditingMessageIndex(null);
+    } else {
+      await handleSubmit(e);
+    }
+  };
+
   return (
     <>
       <Sidebar
@@ -157,6 +182,7 @@ export default function Home() {
             isLoading={isLoading}
             onExamplePromptClick={submitMessage}
             onRetry={retryLastMessage}
+            onEditPrompt={handleEditPrompt}
           />
         </div>
 
@@ -177,12 +203,14 @@ export default function Home() {
               ref={inputRef}
               value={input}
               onChange={setInput}
-              onSubmit={handleSubmit}
+              onSubmit={handleSubmitWithEdit}
               onStop={stop}
               onFileUpload={handleFileUpload}
               isLoading={isLoading}
               isUploading={isUploading}
               disabled={!isConnected}
+              isEditing={editingMessageIndex !== null}
+              onCancelEdit={handleCancelEdit}
             />
           </div>
         </div>
@@ -190,4 +218,3 @@ export default function Home() {
     </>
   );
 }
-

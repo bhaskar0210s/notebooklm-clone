@@ -20,7 +20,7 @@ import { ROUTER_SYSTEM_PROMPT, RESPONSE_SYSTEM_PROMPT } from "./prompts.ts";
 const getDefaultQueryModel = (): string => {
   const useOllama = process.env.USE_OLLAMA === "true";
   if (useOllama) {
-    return "ollama/llama3.2:1b";
+    return "ollama/gemma3:4b";
   } else {
     return "vertexai/gemini-2.5-flash";
   }
@@ -28,6 +28,16 @@ const getDefaultQueryModel = (): string => {
 
 // Constants
 const DEFAULT_QUERY_MODEL = getDefaultQueryModel();
+
+// When USE_OLLAMA is true, always use default Ollama model (ignore client's queryModel)
+const getEffectiveQueryModel = (
+  configurable: Partial<RetrievalConfig>
+): string => {
+  if (process.env.USE_OLLAMA === "true") {
+    return DEFAULT_QUERY_MODEL;
+  }
+  return configurable.queryModel || DEFAULT_QUERY_MODEL;
+};
 const GRAPH_RUN_NAME = "RetrievalGraph";
 
 // Configuration type for better type safety
@@ -72,7 +82,7 @@ async function checkQueryType(
   });
 
   const configurable = (config?.configurable || {}) as Partial<RetrievalConfig>;
-  const queryModel = configurable.queryModel || DEFAULT_QUERY_MODEL;
+  const queryModel = getEffectiveQueryModel(configurable);
   console.log(`[Retrieval Graph] Query model: ${queryModel}`);
   const model = await loadChatModel(queryModel, 0.1);
 
@@ -125,7 +135,7 @@ async function answerQueryDirectly(
   config: RunnableConfig
 ): Promise<typeof RetrievalState.Update> {
   const configurable = (config?.configurable || {}) as Partial<RetrievalConfig>;
-  const queryModel = configurable.queryModel || DEFAULT_QUERY_MODEL;
+  const queryModel = getEffectiveQueryModel(configurable);
   const model = await loadChatModel(queryModel, 0.7);
   const userHumanMessage = new HumanMessage(state.query);
 
@@ -154,7 +164,7 @@ async function generateResponse(
   config: RunnableConfig
 ): Promise<typeof RetrievalState.Update> {
   const configurable = (config?.configurable || {}) as Partial<RetrievalConfig>;
-  const queryModel = configurable.queryModel || DEFAULT_QUERY_MODEL;
+  const queryModel = getEffectiveQueryModel(configurable);
   const model = await loadChatModel(queryModel, 0.2);
 
   // Format documents and create prompt messages

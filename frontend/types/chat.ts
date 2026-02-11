@@ -49,6 +49,8 @@ export interface ChatApiRequest {
   message: string;
   threadId: string;
   assistantId: string;
+  /** Messages to set on thread before run (for edit). Enables remembering prior context. */
+  messagesBeforeEdit?: Message[];
 }
 
 export interface ChatApiError {

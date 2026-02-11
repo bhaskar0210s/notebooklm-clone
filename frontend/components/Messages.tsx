@@ -9,6 +9,7 @@ import {
   DocumentDuplicateIcon,
   CheckIcon,
   ArrowPathIcon,
+  PencilIcon,
 } from "@heroicons/react/24/outline";
 import type { Message } from "@/types/chat.ts";
 
@@ -17,6 +18,7 @@ interface MessagesProps {
   isLoading: boolean;
   onExamplePromptClick?: (prompt: string) => void;
   onRetry?: () => void;
+  onEditPrompt?: (messageIndex: number, content: string) => void;
 }
 
 const EXAMPLE_PROMPTS = [
@@ -30,6 +32,7 @@ export function Messages({
   isLoading,
   onExamplePromptClick,
   onRetry,
+  onEditPrompt,
 }: MessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -319,7 +322,7 @@ export function Messages({
                 )}
               </div>
             </div>
-            {/* Copy and Retry buttons - appear below message on hover */}
+            {/* Copy, Edit (user only), and Retry buttons - appear below message on hover */}
             <div
               className={`mt-1 flex items-center gap-1 transition-opacity opacity-0 group-hover:opacity-100 ${
                 message.role === "user" ? "justify-end" : "justify-start"
@@ -338,6 +341,16 @@ export function Messages({
                     <ArrowPathIcon className="h-3.5 w-3.5" />
                   </button>
                 )}
+              {message.role === "user" && onEditPrompt && !isLoading && (
+                <button
+                  onClick={() => onEditPrompt(messageIndex, message.content)}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:text-gray-400"
+                  title="Edit"
+                  aria-label="Edit message"
+                >
+                  <PencilIcon className="h-3.5 w-3.5" />
+                </button>
+              )}
               <button
                 onClick={() => copyToClipboard(message.content, messageIndex)}
                 className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${

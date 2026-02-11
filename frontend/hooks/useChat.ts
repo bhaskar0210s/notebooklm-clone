@@ -23,6 +23,10 @@ interface UseChatReturn {
   handleSubmit: (event: React.FormEvent) => Promise<void>;
   submitMessage: (messageText: string) => Promise<void>;
   retryLastMessage: () => Promise<void>;
+  editAndResubmitMessage: (
+    messageIndex: number,
+    newContent: string,
+  ) => Promise<void>;
   stop: () => Promise<void>;
   newChat: () => Promise<void>;
   loadSession: (sessionThreadId: string, sessionMessages: Message[]) => void;
@@ -90,15 +94,27 @@ export function useChat(): UseChatReturn {
   }, []);
 
   const sendMessage = useCallback(
-    async (messageText: string) => {
+    async (
+      messageText: string,
+      targetThreadId?: string,
+      messagesBeforeEdit?: Message[],
+    ) => {
+      const id = targetThreadId ?? threadId;
+      if (!id) throw new Error("No thread ID");
+
+      const body: Record<string, unknown> = {
+        message: messageText,
+        threadId: id,
+        assistantId: retrievalAssistantId,
+      };
+      if (Array.isArray(messagesBeforeEdit)) {
+        body.messagesBeforeEdit = messagesBeforeEdit;
+      }
+
       const response = await fetch(API_ENDPOINTS.CHAT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: messageText,
-          threadId,
-          assistantId: retrievalAssistantId,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -234,13 +250,61 @@ export function useChat(): UseChatReturn {
     // Remove the last user message and its assistant response
     setMessages((prev) => prev.slice(0, lastUserIndex));
     await submitMessage(lastUserMessage.content);
-  }, [
-    messages,
-    isLoading,
-    connectionStatus,
-    threadId,
-    submitMessage,
-  ]);
+  }, [messages, isLoading, connectionStatus, threadId, submitMessage]);
+
+  const editAndResubmitMessage = useCallback(
+    async (messageIndex: number, newContent: string) => {
+      newContent = newContent.trim();
+      if (!newContent || isLoading) return;
+
+      const message = messages[messageIndex];
+      if (!message || message.role !== "user") return;
+
+      if (connectionStatus !== "connected" || !threadId) {
+        toast.info(ERROR_MESSAGES.BACKEND_NOT_READY);
+        return;
+      }
+
+      // Messages before the edit point - backend will set these so it remembers context
+      const messagesBeforeEdit = messages.slice(0, messageIndex);
+
+      // Truncate at edited message, add new user message + empty assistant for streaming
+      setMessages((prev) => [
+        ...prev.slice(0, messageIndex),
+        { role: "user", content: newContent },
+        { role: "assistant", content: "" },
+      ]);
+      setInput("");
+      setIsLoading(true);
+      currentRunIdRef.current = null;
+
+      try {
+        const response = await sendMessage(
+          newContent,
+          threadId,
+          messagesBeforeEdit,
+        );
+        await processStreamEvents(response);
+      } catch (error) {
+        appendAssistantMessage(ERROR_MESSAGES.PROCESSING_ERROR);
+        toast.error(
+          error instanceof Error ? error.message : ERROR_MESSAGES.UNKNOWN_ERROR,
+        );
+      } finally {
+        setIsLoading(false);
+        currentRunIdRef.current = null;
+      }
+    },
+    [
+      messages,
+      isLoading,
+      connectionStatus,
+      threadId,
+      sendMessage,
+      processStreamEvents,
+      appendAssistantMessage,
+    ],
+  );
 
   const stop = useCallback(async () => {
     // Cancel the run on the backend if we have a run_id
@@ -288,17 +352,20 @@ export function useChat(): UseChatReturn {
     }
   }, [stop]);
 
-  const loadSession = useCallback((sessionThreadId: string, sessionMessages: Message[]) => {
-    // Stop any ongoing stream
-    currentRunIdRef.current = null;
-    setIsLoading(false);
-    
-    // Load the session
-    setThreadId(sessionThreadId);
-    setMessages(sessionMessages);
-    setInput("");
-    setConnectionStatus("connected");
-  }, []);
+  const loadSession = useCallback(
+    (sessionThreadId: string, sessionMessages: Message[]) => {
+      // Stop any ongoing stream
+      currentRunIdRef.current = null;
+      setIsLoading(false);
+
+      // Load the session
+      setThreadId(sessionThreadId);
+      setMessages(sessionMessages);
+      setInput("");
+      setConnectionStatus("connected");
+    },
+    [],
+  );
 
   return {
     messages,
@@ -310,6 +377,7 @@ export function useChat(): UseChatReturn {
     handleSubmit,
     submitMessage,
     retryLastMessage,
+    editAndResubmitMessage,
     stop,
     newChat,
     loadSession,

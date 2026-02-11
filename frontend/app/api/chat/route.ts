@@ -43,9 +43,19 @@ export async function POST(request: Request) {
       return errorResponse("Message and Thread ID are required", 400);
     }
 
-    const { message, threadId, assistantId } = body;
+    const { message, threadId, assistantId, messagesBeforeEdit } = body;
     const targetAssistantId = assistantId || retrievalAssistantId;
     const client = getServerLangGraphClient();
+
+    if (Array.isArray(messagesBeforeEdit)) {
+      const langGraphMessages = messagesBeforeEdit.map((m) => ({
+        type: m.role === "user" ? "human" : "ai",
+        content: m.content,
+      }));
+      await client.threads.updateState(threadId, {
+        values: { messages: langGraphMessages },
+      });
+    }
 
     const eventStream = await client.runs.stream(threadId, targetAssistantId, {
       input: { query: message },
