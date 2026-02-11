@@ -29,6 +29,20 @@ const IndexStateAnnotation = Annotation.Root({
     }),
     reducer: (existing, incoming) => incoming || existing,
   }),
+  /**
+   * Raw text content to be indexed (alternative to PDF).
+   */
+  textContent: Annotation<string>({
+    default: () => "",
+    reducer: (existing, incoming) => incoming || existing,
+  }),
+  /**
+   * Thread ID for document scoping (per-chat documents in Supabase).
+   */
+  threadId: Annotation<string>({
+    default: () => "",
+    reducer: (existing, incoming) => incoming || existing,
+  }),
 });
 
 const IndexConfigurationAnnotation = Annotation.Root({
@@ -57,14 +71,9 @@ async function addDocumentsWithRetry(
 
     while (retryCount <= maxRetries && !success) {
       try {
-        console.log(
-          `[uploadDocs] Adding batch ${batchNum}/${totalBatches} (${batch.length} documents)`
-        );
-        // Log the embeddings here.
         const embeddings = await vectorStore.embeddings.embedDocuments(
           batch.map((doc) => doc.pageContent)
         );
-        console.log("[uploadDocs] Embeddings completed", embeddings.length);
 
         await vectorStore.addVectors(
           embeddings,
@@ -72,7 +81,6 @@ async function addDocumentsWithRetry(
           batch.map((doc) => doc.metadata || {})
         );
         success = true;
-        console.log(`[uploadDocs] Successfully added batch documents)`);
       } catch (error: any) {
         // Check for rate limit errors in multiple places (error might be nested)
         const errorCode =
@@ -93,9 +101,6 @@ async function addDocumentsWithRetry(
 
         if (isRateLimit && retryCount < maxRetries) {
           retryCount++;
-          console.log(
-            `[uploadDocs] Rate limit hit (batch ${batchNum}). Retrying in ${delay}ms (attempt ${retryCount}/${maxRetries})...`
-          );
           await new Promise((resolve) => setTimeout(resolve, delay));
           // Exponential backoff with jitter
           // delay = Math.min(delay * 2 + Math.random() * 1000, 30000);
@@ -131,29 +136,50 @@ async function uploadDocs(
   // Ensure base configuration is valid
   ensureBaseConfiguration(config);
 
-  // Validate PDF file is provided
-  if (!state.pdfFile || !state.pdfFile.content || !state.pdfFile.filename) {
-    throw new Error("No PDF file provided.");
+  const hasPdf =
+    state.pdfFile && state.pdfFile.content && state.pdfFile.filename;
+  const hasText = state.textContent && state.textContent.trim().length > 0;
+
+  if (!hasPdf && !hasText) {
+    throw new Error("Either a PDF file or text content must be provided.");
   }
 
-  console.log(`[uploadDocs] Processing PDF: ${state.pdfFile.filename}`);
-
-  // Process PDF file
   let docs: Document[];
-  try {
-    docs = await processPDFFromBase64(state.pdfFile);
-    console.log(`[uploadDocs] Extracted ${docs.length} document(s) from PDF`);
-  } catch (error: any) {
-    console.error(`[uploadDocs] Error processing PDF:`, error);
-    throw new Error(
-      `Failed to process PDF ${state.pdfFile.filename}: ${
-        error.message || error
-      }`
-    );
+
+  // Get thread_id from state (input) first, then config - ensures it's always available for Supabase
+  const stateThreadId = state.threadId && state.threadId.trim();
+  const configThreadId = (config.configurable as Record<string, unknown>)
+    ?.thread_id as string | undefined;
+  const threadId = stateThreadId || configThreadId;
+
+  if (hasPdf) {
+    // Process PDF file
+    try {
+      docs = await processPDFFromBase64(state.pdfFile!);
+    } catch (error: any) {
+      console.error(`[uploadDocs] Error processing PDF:`, error);
+      throw new Error(
+        `Failed to process PDF ${state.pdfFile!.filename}: ${
+          error.message || error
+        }`
+      );
+    }
+  } else {
+    // Process text content
+    const textMetadata = {
+      source: "user_text",
+      ...(threadId && { thread_id: threadId }),
+    };
+    docs = [
+      new Document({
+        pageContent: state.textContent!.trim(),
+        metadata: textMetadata,
+      }),
+    ];
   }
 
   if (!docs || docs.length === 0) {
-    throw new Error("No content extracted from PDF file.");
+    throw new Error("No content to index.");
   }
 
   // Chunk documents to stay well within embedding model context limits
@@ -162,20 +188,19 @@ async function uploadDocs(
     chunkOverlap: 1200,
   });
   const splitDocs = await splitter.splitDocuments(docs);
-  console.log(`[uploadDocs] Split into ${splitDocs.length} chunk(s)`);
+
+  // Add thread_id to all document metadata for per-chat scoping
+  if (threadId) {
+    splitDocs.forEach((doc) => {
+      doc.metadata = { ...doc.metadata, thread_id: threadId };
+    });
+  }
 
   try {
     const vectorStore = await makeSupabaseVectorStore(config);
-    console.log(
-      `[uploadDocs] Adding ${splitDocs.length} document(s) to vector store...`
-    );
 
     // Add documents with retry logic and batching to handle rate limits
     await addDocumentsWithRetry(vectorStore, splitDocs);
-
-    console.log(
-      `[uploadDocs] Successfully added ${splitDocs.length} document(s) to Supabase`
-    );
   } catch (error: any) {
     console.error(
       `[uploadDocs] Error adding documents to vector store:`,
@@ -186,7 +211,10 @@ async function uploadDocs(
     );
   }
 
-  return { pdfFile: { filename: "", content: "", mimeType: "" } };
+  return {
+    pdfFile: { filename: "", content: "", mimeType: "" },
+    textContent: "",
+  };
 }
 
 // Graph Builder

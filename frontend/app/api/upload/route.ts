@@ -106,98 +106,207 @@ function createErrorResponse(
 }
 
 /**
- * POST handler for file uploads
+ * POST handler for file uploads and text uploads
+ * Accepts either:
+ * - multipart/form-data with "files" or "file" (PDF)
+ * - application/json with { text: string }
  */
 export async function POST(request: NextRequest) {
   try {
-    // Extract file from FormData
-    const formData = await request.formData();
-    const file = extractFileFromFormData(formData);
+    const contentType = request.headers.get("content-type") || "";
 
-    // Validate file
-    const validation = validateFile(file);
-    if (!validation.isValid) {
-      return createErrorResponse(
-        validation.errors[0] || "Validation failed",
-        400,
-        validation.errors.join("; "),
-      );
-    }
+    let input: {
+      pdfFile?: PDFFileData;
+      textContent?: string;
+      threadId?: string;
+    };
 
-    // Convert file to base64
-    const pdfFile = await convertFileToBase64(file!);
+    if (contentType.includes("application/json")) {
+      // Text upload
+      const body = await request.json();
+      const text = typeof body?.text === "string" ? body.text.trim() : "";
+      const existingThreadId =
+        typeof body?.threadId === "string" ? body.threadId : undefined;
 
-    // Run the upload graph
-    const client = getServerLangGraphClient();
-    const thread = await client.threads.create({});
-    const run = await client.runs.create(thread.thread_id, "upload_graph", {
-      input: {
-        pdfFile,
-      },
-      config: {
-        configurable: {
-          ...indexConfig,
+      if (!text) {
+        return createErrorResponse("Text content is required", 400);
+      }
+
+      // Use existing thread if provided, else create new
+      const client = getServerLangGraphClient();
+      const thread = existingThreadId
+        ? { thread_id: existingThreadId }
+        : await client.threads.create({});
+
+      // Pass threadId in input as well as config - ensures it reaches Supabase
+      input = {
+        textContent: text,
+        threadId: thread.thread_id,
+      };
+
+      const run = await client.runs.create(thread.thread_id, "upload_graph", {
+        input,
+        config: {
+          configurable: {
+            ...indexConfig,
+            thread_id: thread.thread_id,
+          },
         },
-      },
-    });
+      });
 
-    // Poll for run completion using runs.get() (correct API for checking existing run status)
-    let finalStatus: string = run.status;
-    let attempts = 0;
-    const maxAttempts = 150; // 5 minutes max (2 seconds per attempt)
-    const POLL_INTERVAL_MS = 2000; // 2 seconds between polls
+      // Poll for run completion
+      let finalStatus: string = run.status;
+      let attempts = 0;
+      const maxAttempts = 150;
+      const POLL_INTERVAL_MS = 2000;
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
 
-    // Wait before first poll to avoid immediate request
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-
-    while (finalStatus === "pending" || finalStatus === "running") {
-      if (attempts >= maxAttempts) {
-        throw new Error("Upload timeout: The upload is taking too long");
-      }
-
-      try {
-        const runStatus = await client.runs.get(thread.thread_id, run.run_id);
-        finalStatus = runStatus.status || finalStatus;
-        attempts++;
-
-        if (
-          finalStatus === "success" ||
-          finalStatus === "failed" ||
-          finalStatus === "cancelled"
-        ) {
-          break;
-        }
-      } catch (pollError: any) {
-        // If we can't get status, wait a bit and retry
-        attempts++;
+      while (finalStatus === "pending" || finalStatus === "running") {
         if (attempts >= maxAttempts) {
-          throw new Error(
-            `Failed to get run status: ${pollError || "Unknown error"}`,
-          );
+          throw new Error("Upload timeout: The upload is taking too long");
+        }
+        try {
+          const runStatus = await client.runs.get(thread.thread_id, run.run_id);
+          finalStatus = runStatus.status || finalStatus;
+          attempts++;
+          if (
+            finalStatus === "success" ||
+            finalStatus === "failed" ||
+            finalStatus === "cancelled"
+          ) {
+            break;
+          }
+        } catch (pollError: any) {
+          attempts++;
+          if (attempts >= maxAttempts) {
+            throw new Error(
+              `Failed to get run status: ${pollError || "Unknown error"}`,
+            );
+          }
+        }
+        if (finalStatus === "pending" || finalStatus === "running") {
+          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
         }
       }
 
-      // Wait before next poll (only if still pending/running)
-      if (finalStatus === "pending" || finalStatus === "running") {
-        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      if (finalStatus === "failed") {
+        throw new Error("The upload graph failed to process the document");
+      } else if (finalStatus === "cancelled") {
+        throw new Error("The upload was cancelled");
+      } else if (finalStatus !== "success") {
+        throw new Error(
+          `Upload did not complete successfully. Status: ${finalStatus}`,
+        );
       }
-    }
 
-    if (finalStatus === "failed") {
-      throw new Error("The upload graph failed to process the document");
-    } else if (finalStatus === "cancelled") {
-      throw new Error("The upload was cancelled");
-    } else if (finalStatus !== "success") {
-      throw new Error(
-        `Upload did not complete successfully. Status: ${finalStatus}`,
-      );
-    }
+      return NextResponse.json({
+        message: "Text added successfully",
+        threadId: thread.thread_id,
+        runId: run.run_id,
+      });
+    } else {
+      // File upload
+      const formData = await request.formData();
+      const file = extractFileFromFormData(formData);
+      const existingThreadId = formData.get("threadId");
+      const threadIdForUpload =
+        typeof existingThreadId === "string" ? existingThreadId : undefined;
 
-    return NextResponse.json({
-      message: "Document uploaded successfully",
-      threadId: thread.thread_id,
-      runId: run.run_id,
-    });
+      const validation = validateFile(file);
+      if (!validation.isValid) {
+        return createErrorResponse(
+          validation.errors[0] || "Validation failed",
+          400,
+          validation.errors.join("; "),
+        );
+      }
+
+      const pdfFile = await convertFileToBase64(file!);
+
+      // Use existing thread if provided, else create new
+      const client = getServerLangGraphClient();
+      const thread = threadIdForUpload
+        ? { thread_id: threadIdForUpload }
+        : await client.threads.create({});
+
+      // Pass threadId in input as well as config - ensures it reaches Supabase
+      input = {
+        pdfFile,
+        threadId: thread.thread_id,
+      };
+
+      const run = await client.runs.create(thread.thread_id, "upload_graph", {
+        input,
+        config: {
+          configurable: {
+            ...indexConfig,
+            thread_id: thread.thread_id,
+          },
+        },
+      });
+
+      // Poll for run completion using runs.get() (correct API for checking existing run status)
+      let finalStatus: string = run.status;
+      let attempts = 0;
+      const maxAttempts = 150; // 5 minutes max (2 seconds per attempt)
+      const POLL_INTERVAL_MS = 2000; // 2 seconds between polls
+
+      // Wait before first poll to avoid immediate request
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+
+      while (finalStatus === "pending" || finalStatus === "running") {
+        if (attempts >= maxAttempts) {
+          throw new Error("Upload timeout: The upload is taking too long");
+        }
+
+        try {
+          const runStatus = await client.runs.get(thread.thread_id, run.run_id);
+          finalStatus = runStatus.status || finalStatus;
+          attempts++;
+
+          if (
+            finalStatus === "success" ||
+            finalStatus === "failed" ||
+            finalStatus === "cancelled"
+          ) {
+            break;
+          }
+        } catch (pollError: any) {
+          // If we can't get status, wait a bit and retry
+          attempts++;
+          if (attempts >= maxAttempts) {
+            throw new Error(
+              `Failed to get run status: ${pollError || "Unknown error"}`,
+            );
+          }
+        }
+
+        // Wait before next poll (only if still pending/running)
+        if (finalStatus === "pending" || finalStatus === "running") {
+          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        }
+      }
+
+      if (finalStatus === "failed") {
+        throw new Error("The upload graph failed to process the document");
+      } else if (finalStatus === "cancelled") {
+        throw new Error("The upload was cancelled");
+      } else if (finalStatus !== "success") {
+        throw new Error(
+          `Upload did not complete successfully. Status: ${finalStatus}`,
+        );
+      }
+
+      const successMessage = input.textContent
+        ? "Text added successfully"
+        : "Document uploaded successfully";
+
+      return NextResponse.json({
+        message: successMessage,
+        threadId: thread.thread_id,
+        runId: run.run_id,
+      });
+    }
   } catch (error: any) {
     return createErrorResponse(
       "Failed to process file",

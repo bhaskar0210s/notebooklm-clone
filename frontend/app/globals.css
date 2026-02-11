@@ -18,4 +18,26 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* Elegant thin scrollbar - matches project gray/blue theme */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(55 65 81 / 0.8) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+    pointer-events: none;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgb(55 65 81 / 0.8);
+    border-radius: 3px;
+    pointer-events: auto;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(75 85 99 / 0.9);
+  }
 }

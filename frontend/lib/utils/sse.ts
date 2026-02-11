@@ -112,6 +112,42 @@ export function parseSSEChunk(eventChunk: unknown): string | null {
 }
 
 /**
+ * Extracts the error message from an SSE error event.
+ * Returns the message string or null if not an error event or no message.
+ */
+export function extractSSEErrorMessage(eventChunk: unknown): string | null {
+  if (
+    eventChunk == null ||
+    typeof eventChunk !== "object" ||
+    !("event" in eventChunk) ||
+    (eventChunk as SSEEvent).event !== SSE_CONSTANTS.ERROR_EVENT
+  ) {
+    return null;
+  }
+
+  const eventData = (eventChunk as SSEEvent).data;
+  if (eventData == null) return null;
+
+  if (typeof eventData === "string") return eventData;
+  if (
+    typeof eventData === "object" &&
+    "message" in eventData &&
+    typeof (eventData as { message?: unknown }).message === "string"
+  ) {
+    return (eventData as { message: string }).message;
+  }
+  if (
+    typeof eventData === "object" &&
+    "error" in eventData &&
+    typeof (eventData as { error?: unknown }).error === "string"
+  ) {
+    return (eventData as { error: string }).error;
+  }
+
+  return null;
+}
+
+/**
  * Checks if an SSE event is an error event.
  */
 export function isSSEErrorEvent(eventChunk: unknown): boolean {

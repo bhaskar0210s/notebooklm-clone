@@ -11,6 +11,7 @@ interface UseChatHistoryReturn {
   currentSessionId: string | null;
   setCurrentSessionId: (id: string | null) => void;
   saveSession: (threadId: string, messages: Message[]) => void;
+  addUploadSession: (threadId: string, title?: string) => void;
   deleteSession: (threadId: string) => void;
   getSession: (threadId: string) => ChatSession | undefined;
   clearHistory: () => void;
@@ -65,6 +66,24 @@ export function useChatHistory(): UseChatHistoryReturn {
       saveToStorage(chatSessions);
     }
   }, [chatSessions, isLoaded]);
+
+  const addUploadSession = useCallback(
+    (threadId: string, title: string = "Uploaded document") => {
+      setChatSessions((prev) => {
+        if (prev.some((s) => s.threadId === threadId)) return prev;
+        const now = Date.now();
+        const newSession: ChatSession = {
+          threadId,
+          title,
+          messages: [],
+          createdAt: now,
+          updatedAt: now,
+        };
+        return [newSession, ...prev];
+      });
+    },
+    [],
+  );
 
   const saveSession = useCallback((threadId: string, messages: Message[]) => {
     if (messages.length === 0) return;
@@ -123,6 +142,7 @@ export function useChatHistory(): UseChatHistoryReturn {
     currentSessionId,
     setCurrentSessionId,
     saveSession,
+    addUploadSession,
     deleteSession,
     getSession,
     clearHistory,

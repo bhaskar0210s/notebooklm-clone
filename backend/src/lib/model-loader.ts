@@ -12,6 +12,32 @@ const getOllamaBaseUrl = (): string => {
   return process.env.OLLAMA_BASE_URL || "http://localhost:11434";
 };
 
+/** Throws a specific error if Ollama is not reachable (e.g., not running). */
+async function ensureOllamaReachable(baseUrl: string): Promise<void> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    await fetch(`${baseUrl}/api/tags`, { signal: controller.signal });
+    clearTimeout(timeoutId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const isConnectionError =
+      message.includes("fetch failed") ||
+      message.includes("ECONNREFUSED") ||
+      message.includes("ENOTFOUND") ||
+      message.includes("ETIMEDOUT") ||
+      message.includes("ECONNRESET") ||
+      message.includes("aborted");
+
+    if (isConnectionError) {
+      throw new Error(
+        'Ollama is not running. Please start Ollama first (run "ollama serve" or start the Ollama application).'
+      );
+    }
+    throw error;
+  }
+}
+
 /**
  * Load a chat model from a fully specified name.
  * When USE_OLLAMA is true, only Ollama models are allowed (client provider is ignored).
@@ -57,6 +83,8 @@ export async function loadChatModel(
 
   // Handle Ollama models (USE_OLLAMA=true - only Ollama allowed, client provider ignored)
   const ollamaBaseUrl = getOllamaBaseUrl();
+  await ensureOllamaReachable(ollamaBaseUrl);
+
   if (index === -1) {
     return await initChatModel(fullySpecifiedName, {
       temperature: temperature,

@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, forwardRef, useImperativeHandle } from "react";
+import { useRef, forwardRef, useImperativeHandle, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
-import { ArrowUpIcon, PaperClipIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowUpIcon, PaperClipIcon, DocumentTextIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { StopIcon } from "@heroicons/react/24/solid";
 
 interface MessageInputProps {
@@ -12,8 +12,10 @@ interface MessageInputProps {
   onSubmit: (e: React.FormEvent) => void;
   onStop?: () => void | Promise<void>;
   onFileUpload?: (e: React.ChangeEvent<HTMLInputElement>) => void | Promise<void>;
+  onAddTextClick?: () => void;
   isLoading?: boolean;
   isUploading?: boolean;
+  /** When false, input is disabled (e.g. waiting for connection). Submit is blocked when false. */
   disabled?: boolean;
   isEditing?: boolean;
   onCancelEdit?: () => void;
@@ -24,9 +26,11 @@ export interface MessageInputRef {
 }
 
 export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
-  ({ value, onChange, onSubmit, onStop, onFileUpload, isLoading = false, isUploading = false, disabled = false, isEditing = false, onCancelEdit }, ref) => {
+  ({ value, onChange, onSubmit, onStop, onFileUpload, onAddTextClick, isLoading = false, isUploading = false, disabled = false, isEditing = false, onCancelEdit }, ref) => {
     const inputRef = useRef<HTMLInputElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useImperativeHandle(ref, () => ({
       focus: () => {
@@ -42,9 +46,33 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       }
     };
 
-    const handleFileButtonClick = () => {
+    const handleDropdownMouseEnter = () => {
+      if (isLoading) return;
+      if (dropdownTimerRef.current) {
+        clearTimeout(dropdownTimerRef.current);
+        dropdownTimerRef.current = null;
+      }
+      setIsDropdownOpen(true);
+    };
+
+    const handleDropdownMouseLeave = () => {
+      dropdownTimerRef.current = setTimeout(() => {
+        setIsDropdownOpen(false);
+      }, 150);
+    };
+
+    const handleUploadFilesClick = () => {
       fileInputRef.current?.click();
     };
+
+    const handleAddTextClick = () => {
+      onAddTextClick?.();
+      setIsDropdownOpen(false);
+    };
+
+    useEffect(() => {
+      if (isLoading) setIsDropdownOpen(false);
+    }, [isLoading]);
 
     return (
       <form onSubmit={onSubmit} className="relative">
@@ -55,12 +83,12 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           onChange={onFileUpload}
           className="hidden"
         />
-        <div className="flex items-center gap-3 overflow-hidden rounded-2xl border border-gray-700/50 bg-gray-800/80 px-5 py-3.5 shadow-xl backdrop-blur-sm transition-all hover:border-gray-600/50 focus-within:border-blue-500/50 focus-within:ring-2 focus-within:ring-blue-500/20">
+        <div className="relative flex items-center gap-3 rounded-2xl border border-gray-700/50 bg-gray-800/80 px-5 py-3.5 shadow-xl backdrop-blur-sm transition-all hover:border-gray-600/50 focus-within:border-blue-500/50 focus-within:ring-2 focus-within:ring-blue-500/20">
           {isEditing && onCancelEdit && (
             <Button
               type="button"
               onClick={onCancelEdit}
-              disabled={disabled}
+              disabled={isUploading}
               className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-2.5 text-xs text-gray-400 transition-colors hover:bg-gray-700/50 hover:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Cancel edit"
             >
@@ -68,19 +96,46 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
               Cancel
             </Button>
           )}
-          <Button
-            type="button"
-            onClick={handleFileButtonClick}
-            disabled={isUploading || disabled}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-400 transition-all hover:bg-gray-700/50 hover:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Upload file"
+          <div
+            className={`relative ${isLoading ? "pointer-events-none opacity-50" : ""}`}
+            onMouseEnter={handleDropdownMouseEnter}
+            onMouseLeave={handleDropdownMouseLeave}
           >
-            {isUploading ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
-            ) : (
-              <PaperClipIcon className="h-4 w-4" />
+            <Button
+              type="button"
+              onClick={() => !isUploading && !isLoading && setIsDropdownOpen((prev) => !prev)}
+              disabled={isUploading || isLoading}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-400 transition-all hover:bg-gray-700/50 hover:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+              aria-label="Add sources"
+              aria-expanded={isDropdownOpen}
+            >
+              {isUploading ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
+              ) : (
+                <PaperClipIcon className="h-4 w-4" />
+              )}
+            </Button>
+            {isDropdownOpen && !isUploading && !isLoading && (
+              <div className="absolute bottom-full left-0 z-50 mb-2 min-w-[160px] rounded-xl border border-gray-700/50 bg-gray-800 py-1 shadow-xl">
+                <button
+                  type="button"
+                  onClick={handleAddTextClick}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-gray-700/50 hover:text-gray-100"
+                >
+                  <DocumentTextIcon className="h-4 w-4 shrink-0 text-gray-500" />
+                  Add text
+                </button>
+                <button
+                  type="button"
+                  onClick={handleUploadFilesClick}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-200 transition-colors hover:bg-gray-700/50 hover:text-gray-100"
+                >
+                  <PaperClipIcon className="h-4 w-4 shrink-0 text-gray-500" />
+                  Upload files
+                </button>
+              </div>
             )}
-          </Button>
+          </div>
           <Input
             ref={inputRef}
             type="text"
@@ -88,12 +143,12 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             onChange={(e) => onChange(e.target.value)}
             placeholder={
               isUploading
-                ? "Uploading PDF..."
+                ? "Uploading..."
                 : isEditing
                   ? "Edit your message..."
                   : "Ask anything..."
             }
-            disabled={disabled || isUploading}
+            disabled={isUploading}
             className="h-auto flex-1 bg-transparent text-base text-white placeholder:text-gray-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
           />
           <Button

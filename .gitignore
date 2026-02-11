@@ -6,3 +6,6 @@
 
 # JSON files
 *.json
+
+# TypeScript build info
+tsconfig.tsbuildinfo

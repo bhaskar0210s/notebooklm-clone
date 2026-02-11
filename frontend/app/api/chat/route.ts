@@ -57,11 +57,20 @@ export async function POST(request: Request) {
       });
     }
 
+    // Pass thread_id so retrieval only fetches docs from this chat's uploads
+    const configWithThread = {
+      ...retrievalAssistantConfig,
+      filterKwargs: {
+        ...retrievalAssistantConfig.filterKwargs,
+        thread_id: threadId,
+      },
+    };
+
     const eventStream = await client.runs.stream(threadId, targetAssistantId, {
       input: { query: message },
       streamMode: ["messages", "updates"],
       config: {
-        configurable: retrievalAssistantConfig,
+        configurable: configWithThread,
       },
     });
 
@@ -74,11 +83,15 @@ export async function POST(request: Request) {
             controller.enqueue(encoder.encode(formatSSEData(chunk)));
           }
         } catch (streamError) {
+          const errorMessage =
+            streamError instanceof Error
+              ? streamError.message
+              : String(streamError);
           controller.enqueue(
             encoder.encode(
               formatSSEData({
                 event: SSE_CONSTANTS.ERROR_EVENT,
-                data: "Streaming error occurred",
+                data: { message: errorMessage },
               }),
             ),
           );

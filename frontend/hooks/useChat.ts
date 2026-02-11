@@ -9,6 +9,7 @@ import type { Message, ConnectionStatus } from "@/types/chat.ts";
 import {
   parseSSEChunk,
   isSSEErrorEvent,
+  extractSSEErrorMessage,
   readSSEStream,
   isSSEInterruptedErrorEvent,
 } from "@/lib/utils/sse.ts";
@@ -171,7 +172,11 @@ export function useChat(): UseChatReturn {
             appendAssistantMessage(content);
           } else if (isSSEErrorEvent(event)) {
             if (!isSSEInterruptedErrorEvent(event)) {
-              toast.error(ERROR_MESSAGES.STREAMING_ERROR);
+              const errorMessage =
+                extractSSEErrorMessage(event) ??
+                ERROR_MESSAGES.STREAMING_ERROR;
+              appendAssistantMessage(errorMessage);
+              toast.error(errorMessage);
             }
           }
         }
@@ -208,10 +213,10 @@ export function useChat(): UseChatReturn {
         const response = await sendMessage(trimmedInput);
         await processStreamEvents(response);
       } catch (error) {
-        appendAssistantMessage(ERROR_MESSAGES.PROCESSING_ERROR);
-        toast.error(
-          error instanceof Error ? error.message : ERROR_MESSAGES.UNKNOWN_ERROR,
-        );
+        const errorMessage =
+          error instanceof Error ? error.message : ERROR_MESSAGES.UNKNOWN_ERROR;
+        appendAssistantMessage(errorMessage);
+        toast.error(errorMessage);
       } finally {
         setIsLoading(false);
         currentRunIdRef.current = null;
@@ -286,10 +291,10 @@ export function useChat(): UseChatReturn {
         );
         await processStreamEvents(response);
       } catch (error) {
-        appendAssistantMessage(ERROR_MESSAGES.PROCESSING_ERROR);
-        toast.error(
-          error instanceof Error ? error.message : ERROR_MESSAGES.UNKNOWN_ERROR,
-        );
+        const errorMessage =
+          error instanceof Error ? error.message : ERROR_MESSAGES.UNKNOWN_ERROR;
+        appendAssistantMessage(errorMessage);
+        toast.error(errorMessage);
       } finally {
         setIsLoading(false);
         currentRunIdRef.current = null;
