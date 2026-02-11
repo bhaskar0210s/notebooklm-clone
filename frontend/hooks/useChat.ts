@@ -22,7 +22,10 @@ interface UseChatReturn {
   connectionStatus: ConnectionStatus;
   threadId: string | null;
   handleSubmit: (event: React.FormEvent) => Promise<void>;
-  submitMessage: (messageText: string) => Promise<void>;
+  submitMessage: (
+    messageText: string,
+    messagesBeforeEdit?: Message[],
+  ) => Promise<void>;
   retryLastMessage: () => Promise<void>;
   editAndResubmitMessage: (
     messageIndex: number,
@@ -45,6 +48,7 @@ export function useChat(): UseChatReturn {
     useState<ConnectionStatus>("idle");
   const [threadId, setThreadId] = useState<string | null>(null);
   const currentRunIdRef = useRef<string | null>(null);
+  const chatAbortRef = useRef<AbortController | null>(null);
 
   // Initialize thread on mount
   useEffect(() => {
@@ -79,6 +83,15 @@ export function useChat(): UseChatReturn {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
+  // Abort in-flight chat request on unmount (e.g. browser refresh)
+  useEffect(() => {
+    return () => {
+      if (chatAbortRef.current) {
+        chatAbortRef.current.abort();
+      }
+    };
+  }, []);
+
   const appendAssistantMessage = useCallback((content: string) => {
     setMessages((prev) => {
       if (prev.length === 0) {
@@ -99,6 +112,7 @@ export function useChat(): UseChatReturn {
       messageText: string,
       targetThreadId?: string,
       messagesBeforeEdit?: Message[],
+      signal?: AbortSignal,
     ) => {
       const id = targetThreadId ?? threadId;
       if (!id) throw new Error("No thread ID");
@@ -116,6 +130,7 @@ export function useChat(): UseChatReturn {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal,
       });
 
       if (!response.ok) {
@@ -175,7 +190,17 @@ export function useChat(): UseChatReturn {
               const errorMessage =
                 extractSSEErrorMessage(event) ??
                 ERROR_MESSAGES.STREAMING_ERROR;
-              appendAssistantMessage(errorMessage);
+              // Preserve partial content when stream ends with error (e.g. user stopped)
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                if (last?.role === "assistant" && last.content?.trim()) {
+                  return prev; // Keep existing streamed content
+                }
+                return [
+                  ...prev.slice(0, -1),
+                  { role: "assistant", content: errorMessage },
+                ];
+              });
               toast.error(errorMessage);
             }
           }
@@ -188,7 +213,10 @@ export function useChat(): UseChatReturn {
   );
 
   const submitMessage = useCallback(
-    async (messageText: string) => {
+    async (
+      messageText: string,
+      messagesBeforeEdit?: Message[],
+    ) => {
       const trimmedInput = messageText.trim();
       if (!trimmedInput || isLoading) return;
 
@@ -196,6 +224,10 @@ export function useChat(): UseChatReturn {
         toast.info(ERROR_MESSAGES.BACKEND_NOT_READY);
         return;
       }
+
+      // Use provided messages or current state—full history ensures LLM has proper context
+      const contextMessages =
+        messagesBeforeEdit ?? messages;
 
       // Optimistically update UI
       setMessages((prev) => [
@@ -209,20 +241,43 @@ export function useChat(): UseChatReturn {
       // Reset run_id for new request
       currentRunIdRef.current = null;
 
+      const controller = new AbortController();
+      chatAbortRef.current = controller;
+
       try {
-        const response = await sendMessage(trimmedInput);
+        const response = await sendMessage(
+          trimmedInput,
+          undefined,
+          contextMessages,
+          controller.signal,
+        );
         await processStreamEvents(response);
       } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
         const errorMessage =
           error instanceof Error ? error.message : ERROR_MESSAGES.UNKNOWN_ERROR;
-        appendAssistantMessage(errorMessage);
+        // Preserve partial content if user stopped - only show error when nothing was streamed
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && last.content?.trim()) {
+            return prev; // Keep existing streamed content
+          }
+          return [
+            ...prev.slice(0, -1),
+            { role: "assistant", content: errorMessage },
+          ];
+        });
         toast.error(errorMessage);
       } finally {
+        chatAbortRef.current = null;
         setIsLoading(false);
         currentRunIdRef.current = null;
       }
     },
     [
+      messages,
       isLoading,
       connectionStatus,
       threadId,
@@ -253,8 +308,9 @@ export function useChat(): UseChatReturn {
     }
 
     // Remove the last user message and its assistant response
+    const messagesBeforeEdit = messages.slice(0, lastUserIndex);
     setMessages((prev) => prev.slice(0, lastUserIndex));
-    await submitMessage(lastUserMessage.content);
+    await submitMessage(lastUserMessage.content, messagesBeforeEdit);
   }, [messages, isLoading, connectionStatus, threadId, submitMessage]);
 
   const editAndResubmitMessage = useCallback(
@@ -283,19 +339,37 @@ export function useChat(): UseChatReturn {
       setIsLoading(true);
       currentRunIdRef.current = null;
 
+      const controller = new AbortController();
+      chatAbortRef.current = controller;
+
       try {
         const response = await sendMessage(
           newContent,
           threadId,
           messagesBeforeEdit,
+          controller.signal,
         );
         await processStreamEvents(response);
       } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
         const errorMessage =
           error instanceof Error ? error.message : ERROR_MESSAGES.UNKNOWN_ERROR;
-        appendAssistantMessage(errorMessage);
+        // Preserve partial content if user stopped - only show error when nothing was streamed
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && last.content?.trim()) {
+            return prev; // Keep existing streamed content
+          }
+          return [
+            ...prev.slice(0, -1),
+            { role: "assistant", content: errorMessage },
+          ];
+        });
         toast.error(errorMessage);
       } finally {
+        chatAbortRef.current = null;
         setIsLoading(false);
         currentRunIdRef.current = null;
       }
@@ -312,6 +386,12 @@ export function useChat(): UseChatReturn {
   );
 
   const stop = useCallback(async () => {
+    // Abort the fetch to stop reading the stream immediately
+    if (chatAbortRef.current) {
+      chatAbortRef.current.abort();
+      chatAbortRef.current = null;
+    }
+
     // Cancel the run on the backend if we have a run_id
     if (currentRunIdRef.current && threadId) {
       try {
@@ -360,6 +440,10 @@ export function useChat(): UseChatReturn {
   const loadSession = useCallback(
     (sessionThreadId: string, sessionMessages: Message[]) => {
       // Stop any ongoing stream
+      if (chatAbortRef.current) {
+        chatAbortRef.current.abort();
+        chatAbortRef.current = null;
+      }
       currentRunIdRef.current = null;
       setIsLoading(false);
 

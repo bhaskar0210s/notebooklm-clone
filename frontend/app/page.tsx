@@ -40,6 +40,7 @@ export default function Home() {
 
   const inputRef = useRef<MessageInputRef>(null);
   const wasAddTextModalOpen = useRef(false);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [textSources, setTextSources] = useState<
     Array<{ id: string; text: string; readOnly?: boolean }>
@@ -82,10 +83,27 @@ export default function Home() {
     }
   }, [threadId, messages, saveSession, setCurrentSessionId]);
 
+  const cancelUpload = useCallback(() => {
+    if (uploadAbortRef.current) {
+      uploadAbortRef.current.abort();
+      uploadAbortRef.current = null;
+    }
+  }, []);
+
+  // Abort in-flight upload on unmount (e.g. browser refresh)
+  useEffect(() => {
+    return () => {
+      cancelUpload();
+    };
+  }, [cancelUpload]);
+
   const handleFileUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const selectedFiles = Array.from(e.target.files || []);
       if (selectedFiles.length === 0) return;
+
+      const controller = new AbortController();
+      uploadAbortRef.current = controller;
 
       setIsUploading(true);
       try {
@@ -105,6 +123,7 @@ export default function Home() {
         const response = await fetch("/api/upload", {
           method: "POST",
           body: formData,
+          signal: controller.signal,
         });
 
         const data = await response.json();
@@ -130,10 +149,14 @@ export default function Home() {
           setFiles([]); // Clear - files are now in the new thread's context
         }
       } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
         toast.error(
           `Failed to upload files. ${error instanceof Error ? error.message : "Please try again."}`,
         );
       } finally {
+        uploadAbortRef.current = null;
         setIsUploading(false);
         if (e.target) {
           e.target.value = "";
@@ -168,6 +191,9 @@ export default function Home() {
 
   const handleTextUpload = useCallback(
     async (text: string) => {
+      const controller = new AbortController();
+      uploadAbortRef.current = controller;
+
       setIsUploading(true);
       try {
         const isEditingLoaded =
@@ -189,6 +215,7 @@ export default function Home() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
+          signal: controller.signal,
         });
 
         const data = await response.json();
@@ -214,10 +241,14 @@ export default function Home() {
           setTextSources([]);
         }
       } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
         toast.error(
           `Failed to add text. ${error instanceof Error ? error.message : "Please try again."}`,
         );
       } finally {
+        uploadAbortRef.current = null;
         setIsUploading(false);
         setIsAddTextModalOpen(false);
         setEditingTextSourceId(null);
@@ -260,6 +291,7 @@ export default function Home() {
   }, []);
 
   const handleNewChat = useCallback(async () => {
+    cancelUpload();
     setEditingMessageIndex(null);
     setFiles([]);
     setTextSources([]);
@@ -270,7 +302,7 @@ export default function Home() {
     setTimeout(() => {
       inputRef.current?.focus();
     }, 100);
-  }, [newChat, setCurrentSessionId]);
+  }, [cancelUpload, newChat, setCurrentSessionId]);
 
   const handleSelectChat = useCallback(
     async (selectedThreadId: string) => {
