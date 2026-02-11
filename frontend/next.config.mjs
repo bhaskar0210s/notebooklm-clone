@@ -14,7 +14,7 @@ try {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Transpile packages that use ESM exports
-  transpilePackages: ["@langchain/community"],
+  transpilePackages: [],
   // Turbopack configuration
   turbopack: {},
   // Enable standalone output for Docker
