@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   if (!threadId) {
     return NextResponse.json(
       { error: "threadId is required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
   if (!supabaseUrl || !supabaseKey) {
     return NextResponse.json(
       { error: "Supabase is not configured" },
-      { status: 503 }
+      { status: 503 },
     );
   }
 
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
       console.error("[documents API] Supabase error:", error);
       return NextResponse.json(
         { error: "Failed to fetch documents" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -70,19 +70,19 @@ export async function GET(request: NextRequest) {
         const content = (row.content as string) || "";
         if (content.trim()) textChunks.push(content);
       } else if (filename || (source && source !== "user_text")) {
-        const name = filename || (typeof source === "string" ? source : "document.pdf");
+        const name =
+          filename || (typeof source === "string" ? source : "document.pdf");
         if (!files.some((f) => f.name === name)) {
           files.push({ type: "file", name });
         }
       }
     }
 
-    // Combine text chunks (from same paste, split by RecursiveCharacterTextSplitter)
-    const combinedText =
-      textChunks.length > 0 ? textChunks.join("\n\n") : "";
-    const textSources: TextSource[] = combinedText
-      ? [{ type: "text" as const, id: "loaded-text-0", text: combinedText }]
-      : [];
+    const textSources: TextSource[] = textChunks.map((text, i) => ({
+      type: "text" as const,
+      id: `loaded-text-${i}`,
+      text,
+    }));
 
     return NextResponse.json({
       files,
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
     console.error("[documents API] Error:", err);
     return NextResponse.json(
       { error: "Failed to fetch documents" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -110,19 +110,19 @@ export async function DELETE(request: NextRequest) {
   if (!threadId) {
     return NextResponse.json(
       { error: "threadId is required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
   if (!type || (type !== "text" && type !== "file")) {
     return NextResponse.json(
       { error: "type must be 'text' or 'file'" },
-      { status: 400 }
+      { status: 400 },
     );
   }
   if (type === "file" && !filename) {
     return NextResponse.json(
       { error: "filename is required when type is 'file'" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -132,7 +132,7 @@ export async function DELETE(request: NextRequest) {
   if (!supabaseUrl || !supabaseKey) {
     return NextResponse.json(
       { error: "Supabase is not configured" },
-      { status: 503 }
+      { status: 503 },
     );
   }
 
@@ -148,7 +148,7 @@ export async function DELETE(request: NextRequest) {
       console.error("[documents API] Delete select error:", selectError);
       return NextResponse.json(
         { error: "Failed to delete documents" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -177,7 +177,7 @@ export async function DELETE(request: NextRequest) {
       console.error("[documents API] Delete error:", deleteError);
       return NextResponse.json(
         { error: "Failed to delete documents" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -186,7 +186,7 @@ export async function DELETE(request: NextRequest) {
     console.error("[documents API] Delete error:", err);
     return NextResponse.json(
       { error: "Failed to delete documents" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
