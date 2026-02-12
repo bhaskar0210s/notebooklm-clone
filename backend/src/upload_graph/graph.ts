@@ -6,7 +6,10 @@ import { StateGraph, START, END, Annotation } from "@langchain/langgraph";
 import { Document } from "@langchain/core/documents";
 import { RunnableConfig } from "@langchain/core/runnables";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { makeSupabaseVectorStore } from "../shared/retrieval.ts";
+import {
+  makeSupabaseClient,
+  makeSupabaseVectorStore,
+} from "../shared/retrieval.ts";
 import {
   BaseConfigurationAnnotation,
   ensureBaseConfiguration,
@@ -15,6 +18,39 @@ import { processPDFFromBase64, type PDFFileData } from "../shared/pdf.ts";
 
 // Constants
 const GRAPH_RUN_NAME = "uploadGraph";
+
+type IndexOperation = "upload" | "list" | "delete";
+type DeleteType = "text" | "file" | "";
+
+interface DocumentSource {
+  type: "file";
+  name: string;
+}
+
+interface TextSource {
+  type: "text";
+  id: string;
+  text: string;
+}
+
+interface DocumentsResponse {
+  files: DocumentSource[];
+  textSources: TextSource[];
+  success?: boolean;
+}
+
+interface SupabaseDocumentRow {
+  id: number | string | null;
+  content: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+function emptyDocumentsResponse(): DocumentsResponse {
+  return {
+    files: [],
+    textSources: [],
+  };
+}
 
 // State Annotations
 const IndexStateAnnotation = Annotation.Root({
@@ -43,6 +79,34 @@ const IndexStateAnnotation = Annotation.Root({
     default: () => "",
     reducer: (existing, incoming) => incoming || existing,
   }),
+  /**
+   * Operation to run for this graph invocation.
+   */
+  operation: Annotation<IndexOperation>({
+    default: () => "upload",
+    reducer: (_existing, incoming) => incoming || "upload",
+  }),
+  /**
+   * Delete operation type when operation="delete".
+   */
+  deleteType: Annotation<DeleteType>({
+    default: () => "",
+    reducer: (_existing, incoming) => incoming || "",
+  }),
+  /**
+   * File name to delete when deleteType="file".
+   */
+  filename: Annotation<string>({
+    default: () => "",
+    reducer: (_existing, incoming) => incoming || "",
+  }),
+  /**
+   * Document listing and delete operation response.
+   */
+  documentsResponse: Annotation<DocumentsResponse>({
+    default: () => emptyDocumentsResponse(),
+    reducer: (_existing, incoming) => incoming || emptyDocumentsResponse(),
+  }),
 });
 
 const IndexConfigurationAnnotation = Annotation.Root({
@@ -63,7 +127,6 @@ async function addDocumentsWithRetry(
   for (let i = 0; i < documents.length; i += batchSize) {
     const batch = documents.slice(i, i + batchSize);
     const batchNum = Math.floor(i / batchSize) + 1;
-    const totalBatches = Math.ceil(documents.length / batchSize);
 
     let retryCount = 0;
     let delay = initialDelay;
@@ -124,6 +187,149 @@ async function addDocumentsWithRetry(
   }
 }
 
+function getThreadIdFromState(
+  state: typeof IndexStateAnnotation.State,
+  config?: RunnableConfig
+): string {
+  const stateThreadId = state.threadId && state.threadId.trim();
+  const configThreadId = (config?.configurable as Record<string, unknown>)
+    ?.thread_id as string | undefined;
+  const threadId = stateThreadId || configThreadId;
+
+  if (!threadId) {
+    throw new Error("threadId is required");
+  }
+
+  return threadId;
+}
+
+async function checkOperation(
+  state: typeof IndexStateAnnotation.State
+): Promise<{ operation: IndexOperation }> {
+  const normalized = state.operation?.toString().trim().toLowerCase();
+
+  if (normalized === "list" || normalized === "delete") {
+    return { operation: normalized };
+  }
+
+  return { operation: "upload" };
+}
+
+async function routeIndexOperation(
+  state: typeof IndexStateAnnotation.State
+): Promise<"uploadDocs" | "manageDocuments"> {
+  if (state.operation === "list" || state.operation === "delete") {
+    return "manageDocuments";
+  }
+  return "uploadDocs";
+}
+
+async function manageDocuments(
+  state: typeof IndexStateAnnotation.State,
+  config?: RunnableConfig
+): Promise<typeof IndexStateAnnotation.Update> {
+  // Keep config validation consistent with other graph operations.
+  if (config) {
+    ensureBaseConfiguration(config);
+  }
+
+  const threadId = getThreadIdFromState(state, config);
+  const supabase = makeSupabaseClient();
+  const operation = state.operation;
+
+  const { data: rows, error: selectError } = await supabase
+    .from("documents")
+    .select("id, content, metadata")
+    .eq("thread_id", threadId);
+
+  if (selectError) {
+    throw new Error("Failed to fetch documents");
+  }
+
+  const normalizedRows = (rows || []) as SupabaseDocumentRow[];
+
+  if (operation === "list") {
+    const files: DocumentSource[] = [];
+    const textChunks: string[] = [];
+
+    for (const row of normalizedRows) {
+      const metadata = row.metadata || {};
+      const source =
+        typeof metadata.source === "string" ? metadata.source : undefined;
+      const filename =
+        typeof metadata.filename === "string" ? metadata.filename : undefined;
+
+      if (source === "user_text") {
+        const content = row.content || "";
+        if (content.trim()) {
+          textChunks.push(content);
+        }
+      } else if (filename || (source && source !== "user_text")) {
+        const name = filename || source || "document.pdf";
+        if (!files.some((file) => file.name === name)) {
+          files.push({ type: "file", name });
+        }
+      }
+    }
+
+    const textSources: TextSource[] = textChunks.map((text, index) => ({
+      type: "text",
+      id: `loaded-text-${index}`,
+      text,
+    }));
+
+    return {
+      documentsResponse: {
+        files,
+        textSources,
+      },
+    };
+  }
+
+  if (operation === "delete") {
+    const deleteType = state.deleteType;
+    const filename = state.filename?.trim();
+
+    if (deleteType !== "text" && deleteType !== "file") {
+      throw new Error("deleteType must be 'text' or 'file'");
+    }
+    if (deleteType === "file" && !filename) {
+      throw new Error("filename is required when deleteType is 'file'");
+    }
+
+    const ids = normalizedRows
+      .filter((row) => {
+        const metadata = row.metadata || {};
+        if (deleteType === "text") {
+          return metadata.source === "user_text";
+        }
+        return metadata.filename === filename;
+      })
+      .map((row) => row.id)
+      .filter((id): id is number | string => id !== null && id !== undefined);
+
+    if (ids.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("documents")
+        .delete()
+        .in("id", ids);
+
+      if (deleteError) {
+        throw new Error("Failed to delete documents");
+      }
+    }
+
+    return {
+      documentsResponse: {
+        ...emptyDocumentsResponse(),
+        success: true,
+      },
+    };
+  }
+
+  throw new Error(`Unsupported operation: ${operation}`);
+}
+
 // Node Functions
 async function uploadDocs(
   state: typeof IndexStateAnnotation.State,
@@ -147,10 +353,7 @@ async function uploadDocs(
   let docs: Document[];
 
   // Get thread_id from state (input) first, then config - ensures it's always available for Supabase
-  const stateThreadId = state.threadId && state.threadId.trim();
-  const configThreadId = (config.configurable as Record<string, unknown>)
-    ?.thread_id as string | undefined;
-  const threadId = stateThreadId || configThreadId;
+  const threadId = getThreadIdFromState(state, config);
 
   if (hasPdf) {
     // Process PDF file
@@ -184,8 +387,8 @@ async function uploadDocs(
 
   // Chunk documents to stay well within embedding model context limits
   const splitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 8000,
-    chunkOverlap: 1200,
+    chunkSize: 1500,
+    chunkOverlap: 200,
   });
   const splitDocs = await splitter.splitDocuments(docs);
 
@@ -222,9 +425,16 @@ const uploadGraphBuilder = new StateGraph(
   IndexStateAnnotation,
   IndexConfigurationAnnotation
 )
+  .addNode("checkOperation", checkOperation)
   .addNode("uploadDocs", uploadDocs)
-  .addEdge(START, "uploadDocs")
-  .addEdge("uploadDocs", END);
+  .addNode("manageDocuments", manageDocuments)
+  .addEdge(START, "checkOperation")
+  .addConditionalEdges("checkOperation", routeIndexOperation, [
+    "uploadDocs",
+    "manageDocuments",
+  ])
+  .addEdge("uploadDocs", END)
+  .addEdge("manageDocuments", END);
 
 export const graph = uploadGraphBuilder.compile().withConfig({
   runName: GRAPH_RUN_NAME,

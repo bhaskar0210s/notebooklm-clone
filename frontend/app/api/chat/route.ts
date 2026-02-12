@@ -52,9 +52,22 @@ export async function POST(request: Request) {
         type: m.role === "user" ? "human" : "ai",
         content: m.content,
       }));
-      await client.threads.updateState(threadId, {
-        values: { messages: langGraphMessages },
-      });
+      try {
+        await client.threads.updateState(threadId, {
+          values: { messages: langGraphMessages },
+        });
+      } catch (stateError) {
+        const errorMessage =
+          stateError instanceof Error
+            ? stateError.message
+            : String(stateError);
+        if (!errorMessage.includes("has no graph ID")) {
+          throw stateError;
+        }
+        console.warn(
+          `[chat API] Skipping state update for thread ${threadId}: ${errorMessage}`,
+        );
+      }
     }
 
     // Pass thread_id so retrieval only fetches docs from this chat's uploads
@@ -109,6 +122,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (routeError) {
+    console.error("[chat API] Route error:", routeError);
     return errorResponse("Internal server error", 500);
   }
 }

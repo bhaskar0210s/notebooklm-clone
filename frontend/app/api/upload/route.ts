@@ -1,5 +1,8 @@
 // app/api/upload/route.ts
-import { indexConfig } from "@/constants/graphConfigs.ts";
+import {
+  indexConfig,
+  retrievalAssistantId,
+} from "@/constants/graphConfigs.ts";
 import { getServerLangGraphClient } from "@/lib/langgraph.ts";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -136,7 +139,9 @@ export async function POST(request: NextRequest) {
       const client = getServerLangGraphClient();
       const thread = existingThreadId
         ? { thread_id: existingThreadId }
-        : await client.threads.create({});
+        : await client.threads.create({
+            graphId: retrievalAssistantId,
+          });
 
       // Pass threadId in input as well as config - ensures it reaches Supabase
       input = {
@@ -227,7 +232,9 @@ export async function POST(request: NextRequest) {
       const client = getServerLangGraphClient();
       const thread = threadIdForUpload
         ? { thread_id: threadIdForUpload }
-        : await client.threads.create({});
+        : await client.threads.create({
+            graphId: retrievalAssistantId,
+          });
 
       // Pass threadId in input as well as config - ensures it reaches Supabase
       input = {

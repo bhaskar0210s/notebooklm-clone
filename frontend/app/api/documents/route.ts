@@ -1,4 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
+import { indexConfig } from "@/constants/graphConfigs.ts";
+import { getServerLangGraphClient } from "@/lib/langgraph.ts";
 import { NextRequest, NextResponse } from "next/server";
 
 export interface DocumentSource {
@@ -17,10 +18,52 @@ export interface DocumentsResponse {
   textSources: TextSource[];
 }
 
+interface UploadGraphDocumentsResponse {
+  files?: DocumentSource[];
+  textSources?: TextSource[];
+  success?: boolean;
+}
+
+interface UploadGraphValues {
+  documentsResponse?: UploadGraphDocumentsResponse;
+}
+
+type DocumentsOperationInput =
+  | {
+      operation: "list";
+      threadId: string;
+    }
+  | {
+      operation: "delete";
+      threadId: string;
+      deleteType: "text" | "file";
+      filename?: string;
+    };
+
+async function runDocumentsOperation(input: DocumentsOperationInput) {
+  const client = getServerLangGraphClient();
+  return client.runs.wait(null, "upload_graph", {
+    input,
+    config: {
+      configurable: {
+        ...indexConfig,
+        thread_id: input.threadId,
+      },
+    },
+  });
+}
+
+function normalizeDocumentsResponse(values: unknown): DocumentsResponse {
+  const response = (values as UploadGraphValues | null)?.documentsResponse;
+  return {
+    files: Array.isArray(response?.files) ? response.files : [],
+    textSources: Array.isArray(response?.textSources) ? response.textSources : [],
+  };
+}
+
 /**
  * GET /api/documents?threadId=xxx
- * Fetches document metadata for a given thread from Supabase.
- * Returns file names (PDFs) and text sources for display above the input.
+ * Fetches document metadata for a given thread from backend.
  */
 export async function GET(request: NextRequest) {
   const threadId = request.nextUrl.searchParams.get("threadId");
@@ -31,63 +74,15 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    return NextResponse.json(
-      { error: "Supabase is not configured" },
-      { status: 503 },
-    );
-  }
-
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const values = await runDocumentsOperation({
+      operation: "list",
+      threadId,
+    });
 
-    // Query documents by thread_id column
-    const { data: rows, error } = await supabase
-      .from("documents")
-      .select("content, metadata")
-      .eq("thread_id", threadId);
-
-    if (error) {
-      console.error("[documents API] Supabase error:", error);
-      return NextResponse.json(
-        { error: "Failed to fetch documents" },
-        { status: 500 },
-      );
-    }
-
-    const files: DocumentSource[] = [];
-    const textChunks: string[] = [];
-
-    for (const row of rows || []) {
-      const metadata = (row.metadata as Record<string, unknown>) || {};
-      const source = metadata.source as string | undefined;
-      const filename = metadata.filename as string | undefined;
-
-      if (source === "user_text") {
-        const content = (row.content as string) || "";
-        if (content.trim()) textChunks.push(content);
-      } else if (filename || (source && source !== "user_text")) {
-        const name =
-          filename || (typeof source === "string" ? source : "document.pdf");
-        if (!files.some((f) => f.name === name)) {
-          files.push({ type: "file", name });
-        }
-      }
-    }
-
-    const textSources: TextSource[] = textChunks.map((text, i) => ({
-      type: "text" as const,
-      id: `loaded-text-${i}`,
-      text,
-    }));
-
-    return NextResponse.json({
-      files,
-      textSources,
-    } satisfies DocumentsResponse);
+    return NextResponse.json(
+      normalizeDocumentsResponse(values) satisfies DocumentsResponse,
+    );
   } catch (err) {
     console.error("[documents API] Error:", err);
     return NextResponse.json(
@@ -100,11 +95,11 @@ export async function GET(request: NextRequest) {
 /**
  * DELETE /api/documents?threadId=xxx&type=text
  * DELETE /api/documents?threadId=xxx&type=file&filename=doc.pdf
- * Deletes documents from Supabase for the given thread.
+ * Deletes documents via backend service for the given thread.
  */
 export async function DELETE(request: NextRequest) {
   const threadId = request.nextUrl.searchParams.get("threadId");
-  const type = request.nextUrl.searchParams.get("type"); // "text" | "file"
+  const type = request.nextUrl.searchParams.get("type");
   const filename = request.nextUrl.searchParams.get("filename");
 
   if (!threadId) {
@@ -126,59 +121,17 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    return NextResponse.json(
-      { error: "Supabase is not configured" },
-      { status: 503 },
-    );
-  }
-
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const values = await runDocumentsOperation({
+      operation: "delete",
+      threadId,
+      deleteType: type,
+      ...(filename ? { filename } : {}),
+    });
 
-    const { data: rows, error: selectError } = await supabase
-      .from("documents")
-      .select("id, metadata")
-      .eq("thread_id", threadId);
-
-    if (selectError) {
-      console.error("[documents API] Delete select error:", selectError);
-      return NextResponse.json(
-        { error: "Failed to delete documents" },
-        { status: 500 },
-      );
-    }
-
-    const metadata = (row: { metadata?: unknown }) =>
-      (row.metadata as Record<string, unknown>) || {};
-    const ids = (rows || [])
-      .filter((r) => {
-        const m = metadata(r);
-        if (type === "text") return m.source === "user_text";
-        if (type === "file" && filename) return m.filename === filename;
-        return false;
-      })
-      .map((r) => r.id)
-      .filter((id): id is number => id != null);
-
-    if (ids.length === 0) {
-      return NextResponse.json({ success: true });
-    }
-
-    const { error: deleteError } = await supabase
-      .from("documents")
-      .delete()
-      .in("id", ids);
-
-    if (deleteError) {
-      console.error("[documents API] Delete error:", deleteError);
-      return NextResponse.json(
-        { error: "Failed to delete documents" },
-        { status: 500 },
-      );
+    const response = (values as UploadGraphValues | null)?.documentsResponse;
+    if (response?.success === false) {
+      throw new Error("Delete operation failed");
     }
 
     return NextResponse.json({ success: true });

@@ -10,6 +10,11 @@ import {
   ensureBaseConfiguration,
 } from "./configuration.ts";
 
+type SupabaseEnv = {
+  supabaseUrl: string;
+  supabaseServiceRoleKey: string;
+};
+
 // Check if we should use Ollama based on environment variable
 const shouldUseOllama = (): boolean => {
   return process.env.USE_OLLAMA === "true";
@@ -22,6 +27,27 @@ const getOllamaBaseUrl = (): string => {
 
 // Default Ollama embedding model when USE_OLLAMA=true
 const DEFAULT_OLLAMA_EMBEDDING_MODEL = "nomic-embed-text:latest";
+
+function getSupabaseEnv(): SupabaseEnv {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    throw new Error(
+      "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables are not defined"
+    );
+  }
+
+  return {
+    supabaseUrl,
+    supabaseServiceRoleKey,
+  };
+}
+
+export function makeSupabaseClient() {
+  const { supabaseUrl, supabaseServiceRoleKey } = getSupabaseEnv();
+  return createClient(supabaseUrl, supabaseServiceRoleKey);
+}
 
 /**
  * Create embeddings instance based on USE_OLLAMA environment variable
@@ -47,17 +73,8 @@ function createEmbeddings(): Embeddings {
 export async function makeSupabaseRetriever(
   configuration: typeof BaseConfigurationAnnotation.State
 ): Promise<VectorStoreRetriever> {
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error(
-      "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables are not defined"
-    );
-  }
-
   const embeddings = createEmbeddings();
-  const supabaseClient = createClient(
-    process.env.SUPABASE_URL ?? "",
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
-  );
+  const supabaseClient = makeSupabaseClient();
   const vectorStore = new SupabaseVectorStore(embeddings, {
     client: supabaseClient,
     tableName: "documents",
@@ -85,17 +102,8 @@ export async function makeSupabaseVectorStore(
   // Validate configuration (even though we don't use it, we want to ensure it's valid)
   ensureBaseConfiguration(config);
 
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error(
-      "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables are not defined"
-    );
-  }
-
   const embeddings = createEmbeddings();
-  const supabaseClient = createClient(
-    process.env.SUPABASE_URL ?? "",
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
-  );
+  const supabaseClient = makeSupabaseClient();
   return new SupabaseVectorStore(embeddings, {
     client: supabaseClient,
     tableName: "documents",

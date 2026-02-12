@@ -61,7 +61,9 @@ export function useChat(): UseChatReturn {
     const initializeThread = async () => {
       try {
         const client = getLangGraphClient();
-        const thread = await client.threads.create();
+        const thread = await client.threads.create({
+          graphId: retrievalAssistantId,
+        });
 
         if (!isCancelled) {
           setThreadId(thread.thread_id);
@@ -225,10 +227,6 @@ export function useChat(): UseChatReturn {
         return;
       }
 
-      // Use provided messages or current state—full history ensures LLM has proper context
-      const contextMessages =
-        messagesBeforeEdit ?? messages;
-
       // Optimistically update UI
       setMessages((prev) => [
         ...prev,
@@ -248,7 +246,7 @@ export function useChat(): UseChatReturn {
         const response = await sendMessage(
           trimmedInput,
           undefined,
-          contextMessages,
+          messagesBeforeEdit,
           controller.signal,
         );
         await processStreamEvents(response);
@@ -277,7 +275,6 @@ export function useChat(): UseChatReturn {
       }
     },
     [
-      messages,
       isLoading,
       connectionStatus,
       threadId,
@@ -428,7 +425,9 @@ export function useChat(): UseChatReturn {
     // Create a new thread
     try {
       const client = getLangGraphClient();
-      const thread = await client.threads.create();
+      const thread = await client.threads.create({
+        graphId: retrievalAssistantId,
+      });
       setThreadId(thread.thread_id);
       setConnectionStatus("connected");
     } catch (error) {
