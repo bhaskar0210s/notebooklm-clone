@@ -26,7 +26,9 @@ export async function processPDFFromBase64(
 
   // Create temporary directory and file
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pdf-"));
-  const tempFilePath = path.join(tempDir, pdfData.filename);
+  // Sanitize filename to prevent path traversal (e.g. ../../../etc/passwd)
+  const safeFilename = path.basename(pdfData.filename) || "document.pdf";
+  const tempFilePath = path.join(tempDir, safeFilename);
 
   try {
     // Write buffer to temporary file
