@@ -196,20 +196,30 @@ export default function Home() {
 
       setIsUploading(true);
       try {
-        const isEditingLoaded =
-          editingTextSourceId &&
-          textSources.find((s) => s.id === editingTextSourceId)?.readOnly;
+        const editingSource =
+          editingTextSourceId
+            ? textSources.find((s) => s.id === editingTextSourceId)
+            : undefined;
+        const isEditingLoaded = Boolean(editingSource?.readOnly);
 
         if (isEditingLoaded && threadId) {
+          const params = new URLSearchParams({
+            threadId,
+            type: "text",
+            textId: editingSource!.id,
+          });
           const delRes = await fetch(
-            `/api/documents?threadId=${encodeURIComponent(threadId)}&type=text`,
+            `/api/documents?${params.toString()}`,
             { method: "DELETE" }
           );
           if (!delRes.ok) throw new Error("Failed to remove old text");
         }
 
-        const body: { text: string; threadId?: string } = { text };
+        const body: { text: string; threadId?: string; textId?: string } = {
+          text,
+        };
         if (threadId) body.threadId = threadId;
+        if (editingSource?.id) body.textId = editingSource.id;
 
         const response = await fetch("/api/upload", {
           method: "POST",
@@ -223,13 +233,25 @@ export default function Home() {
           throw new Error(data.error || "Failed to add text");
         }
 
+        const returnedTextId =
+          typeof data.textId === "string" && data.textId
+            ? data.textId
+            : editingSource?.id || crypto.randomUUID();
+
         if (editingTextSourceId) {
           setTextSources((prev) =>
-            prev.map((s) => (s.id === editingTextSourceId ? { ...s, text, readOnly: false } : s)),
+            prev.map((s) =>
+              s.id === editingTextSourceId
+                ? { ...s, id: returnedTextId, text, readOnly: true }
+                : s,
+            ),
           );
           toast.success("Text updated successfully");
         } else {
-          setTextSources((prev) => [...prev, { id: crypto.randomUUID(), text }]);
+          setTextSources((prev) => [
+            ...prev,
+            { id: returnedTextId, text, readOnly: true },
+          ]);
           toast.success("Text added successfully");
         }
 
@@ -264,8 +286,13 @@ export default function Home() {
 
       if (isLoaded && threadId) {
         try {
+          const params = new URLSearchParams({
+            threadId,
+            type: "text",
+            textId: idToRemove,
+          });
           const res = await fetch(
-            `/api/documents?threadId=${encodeURIComponent(threadId)}&type=text`,
+            `/api/documents?${params.toString()}`,
             { method: "DELETE" }
           );
           if (!res.ok) throw new Error("Failed to delete");
@@ -405,6 +432,7 @@ export default function Home() {
           <Messages
             messages={messages}
             isLoading={isLoading}
+            isUploading={isUploading}
             onExamplePromptClick={submitMessage}
             onRetry={retryLastMessage}
             onEditPrompt={handleEditPrompt}

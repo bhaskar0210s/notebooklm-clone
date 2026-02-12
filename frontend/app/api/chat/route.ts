@@ -8,6 +8,23 @@ import { SSE_CONSTANTS } from "@/constants/api.ts";
 import type { ChatApiRequest, ChatApiError } from "@/types/chat.ts";
 
 export const runtime = "edge";
+const MAX_MESSAGE_LENGTH = 10_000;
+const MAX_THREAD_ID_LENGTH = 200;
+
+function isValidMessageHistory(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!Array.isArray(value)) return false;
+  return value.every(
+    (item) =>
+      item &&
+      typeof item === "object" &&
+      ("role" in item) &&
+      ("content" in item) &&
+      ((item as { role?: unknown }).role === "user" ||
+        (item as { role?: unknown }).role === "assistant") &&
+      typeof (item as { content?: unknown }).content === "string",
+  );
+}
 
 /**
  * Validates the chat request payload.
@@ -15,8 +32,24 @@ export const runtime = "edge";
 function validateRequest(body: unknown): body is ChatApiRequest {
   if (!body || typeof body !== "object") return false;
 
-  const { message, threadId } = body as Partial<ChatApiRequest>;
-  return typeof message === "string" && typeof threadId === "string";
+  const { message, threadId, messagesBeforeEdit } = body as Partial<ChatApiRequest>;
+  if (typeof message !== "string" || typeof threadId !== "string") {
+    return false;
+  }
+
+  const trimmedMessage = message.trim();
+  const trimmedThreadId = threadId.trim();
+  if (!trimmedMessage || !trimmedThreadId) {
+    return false;
+  }
+  if (
+    trimmedMessage.length > MAX_MESSAGE_LENGTH ||
+    trimmedThreadId.length > MAX_THREAD_ID_LENGTH
+  ) {
+    return false;
+  }
+
+  return isValidMessageHistory(messagesBeforeEdit);
 }
 
 /**
@@ -43,7 +76,9 @@ export async function POST(request: Request) {
       return errorResponse("Message and Thread ID are required", 400);
     }
 
-    const { message, threadId, assistantId, messagesBeforeEdit } = body;
+    const { assistantId, messagesBeforeEdit } = body;
+    const message = body.message.trim();
+    const threadId = body.threadId.trim();
     const targetAssistantId = assistantId || retrievalAssistantId;
     const client = getServerLangGraphClient();
 

@@ -1,5 +1,4 @@
 {
-  "extends": "@tsconfig/recommended",
   "compilerOptions": {
     "target": "ES2021",
     "lib": ["ES2021", "ES2022.Object", "DOM"],
@@ -16,6 +15,7 @@
     "allowJs": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
+    "skipLibCheck": true,
     "strict": true,
     "strictFunctionTypes": false,
     "outDir": "dist",

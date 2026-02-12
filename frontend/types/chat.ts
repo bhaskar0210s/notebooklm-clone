@@ -36,6 +36,7 @@ export type SSEEventData =
   | unknown;
 
 export interface SSEMessagePayload {
+  id?: string;
   type?: string;
   content?: string | ContentPart[] | unknown;
 }

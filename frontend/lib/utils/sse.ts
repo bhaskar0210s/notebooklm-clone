@@ -10,6 +10,11 @@ import type {
 } from "@/types/chat.ts";
 import { SSE_CONSTANTS } from "@/constants/api.ts";
 
+interface ParsedSSEMessageChunk {
+  content: string;
+  messageId?: string;
+}
+
 /**
  * Extracts text content from various message content formats.
  * Handles string, array, and object-based content structures.
@@ -50,6 +55,69 @@ function isAssistantMessage(messageType: string | undefined): boolean {
   );
 }
 
+function extractRouteDecision(
+  messageText: string,
+): "direct" | "retrieve" | null {
+  const trimmedText = messageText.trim();
+  if (!trimmedText) return null;
+
+  const lowercaseText = trimmedText.toLowerCase();
+  if (lowercaseText === "direct" || lowercaseText === "retrieve") {
+    return lowercaseText;
+  }
+
+  const routeLineMatch = trimmedText.match(
+    /^route\s*[:=]\s*(direct|retrieve)\.?$/i,
+  );
+  if (routeLineMatch) {
+    return routeLineMatch[1]!.toLowerCase() as "direct" | "retrieve";
+  }
+
+  const parseableCandidates = [trimmedText];
+  const fencedJsonMatch = trimmedText.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fencedJsonMatch?.[1]) {
+    parseableCandidates.push(fencedJsonMatch[1].trim());
+  }
+
+  for (const candidate of parseableCandidates) {
+    try {
+      const parsed = JSON.parse(candidate) as Record<string, unknown>;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        continue;
+      }
+
+      const routeValue = parsed.route;
+      if (routeValue !== "direct" && routeValue !== "retrieve") {
+        continue;
+      }
+
+      const allowedKeys = new Set(["route", "reason", "explanation"]);
+      const hasOnlyAllowedKeys = Object.keys(parsed).every((key) =>
+        allowedKeys.has(key),
+      );
+      if (!hasOnlyAllowedKeys) {
+        continue;
+      }
+
+      return routeValue;
+    } catch {
+      // Not JSON, continue checking other patterns.
+    }
+  }
+
+  return null;
+}
+
+function isInternalRouteDecisionPayload(messageText: string): boolean {
+  const routeDecision = extractRouteDecision(messageText);
+  if (!routeDecision) {
+    return false;
+  }
+
+  // Keep the filter narrow so normal assistant responses are not suppressed.
+  return messageText.trim().length <= 240;
+}
+
 /**
  * Extracts message array from SSE event data.
  */
@@ -77,6 +145,13 @@ function extractMessageArray(
  * Returns the content string if valid, null otherwise.
  */
 export function parseSSEChunk(eventChunk: unknown): string | null {
+  const parsedChunk = parseSSEMessageChunk(eventChunk);
+  return parsedChunk?.content ?? null;
+}
+
+export function parseSSEMessageChunk(
+  eventChunk: unknown,
+): ParsedSSEMessageChunk | null {
   if (!eventChunk || typeof eventChunk !== "object") {
     return null;
   }
@@ -102,13 +177,53 @@ export function parseSSEChunk(eventChunk: unknown): string | null {
   if (!messageText?.trim()) {
     return null;
   }
-
-  // Filter out JSON metadata that sometimes appears
-  if (messageText.trim().startsWith("{")) {
+  if (isInternalRouteDecisionPayload(messageText)) {
     return null;
   }
 
-  return messageText;
+  return {
+    content: messageText,
+    messageId: typeof lastMessage?.id === "string" ? lastMessage.id : undefined,
+  };
+}
+
+export function extractSSEMessageNodeMetadata(
+  eventChunk: unknown,
+): Record<string, string> {
+  if (
+    !eventChunk ||
+    typeof eventChunk !== "object" ||
+    !("event" in eventChunk) ||
+    (eventChunk as SSEEvent).event !== "messages/metadata"
+  ) {
+    return {};
+  }
+
+  const metadataEventData = (eventChunk as SSEEvent).data;
+  if (!metadataEventData || typeof metadataEventData !== "object") {
+    return {};
+  }
+
+  const messageNodeById: Record<string, string> = {};
+  for (const [messageId, messageMetadata] of Object.entries(
+    metadataEventData as Record<string, unknown>,
+  )) {
+    if (!messageMetadata || typeof messageMetadata !== "object") {
+      continue;
+    }
+
+    const metadata = (messageMetadata as { metadata?: unknown }).metadata;
+    if (!metadata || typeof metadata !== "object") {
+      continue;
+    }
+
+    const nodeName = (metadata as Record<string, unknown>).langgraph_node;
+    if (typeof nodeName === "string" && nodeName.trim()) {
+      messageNodeById[messageId] = nodeName;
+    }
+  }
+
+  return messageNodeById;
 }
 
 /**

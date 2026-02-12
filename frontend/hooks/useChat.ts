@@ -8,10 +8,12 @@ import { API_ENDPOINTS, ERROR_MESSAGES } from "@/constants/api.ts";
 import type { Message, ConnectionStatus } from "@/types/chat.ts";
 import {
   parseSSEChunk,
+  parseSSEMessageChunk,
   isSSEErrorEvent,
   extractSSEErrorMessage,
   readSSEStream,
   isSSEInterruptedErrorEvent,
+  extractSSEMessageNodeMetadata,
 } from "@/lib/utils/sse.ts";
 
 interface UseChatReturn {
@@ -169,26 +171,43 @@ export function useChat(): UseChatReturn {
 
   const processStreamEvents = useCallback(
     async (response: Response) => {
+      let isInterruptedStream = false;
+      const messageNodeById = new Map<string, string>();
+
       try {
         for await (const event of readSSEStream(response)) {
+          const eventNodeMetadata = extractSSEMessageNodeMetadata(event);
+          for (const [messageId, nodeName] of Object.entries(eventNodeMetadata)) {
+            messageNodeById.set(messageId, nodeName);
+          }
+
           // Extract and track run_id from events
           if (!currentRunIdRef.current) {
             const runId = extractRunId(event);
-
             if (runId) {
               currentRunIdRef.current = runId;
-            } else {
-              if (!isSSEInterruptedErrorEvent(event)) {
-                toast.error(ERROR_MESSAGES.NO_RUN_ID);
-              }
             }
           }
 
-          const content = parseSSEChunk(event);
+          const isInterruptedEvent = isSSEInterruptedErrorEvent(event);
+          if (isInterruptedEvent) {
+            isInterruptedStream = true;
+          }
+
+          const parsedChunk = parseSSEMessageChunk(event);
+          const content = parsedChunk?.content ?? parseSSEChunk(event);
           if (content) {
+            const sourceNode = parsedChunk?.messageId
+              ? messageNodeById.get(parsedChunk.messageId)
+              : undefined;
+
+            // Ignore classifier output from the routing node.
+            if (sourceNode === "checkQueryType") {
+              continue;
+            }
             appendAssistantMessage(content);
           } else if (isSSEErrorEvent(event)) {
-            if (!isSSEInterruptedErrorEvent(event)) {
+            if (!isInterruptedEvent) {
               const errorMessage =
                 extractSSEErrorMessage(event) ??
                 ERROR_MESSAGES.STREAMING_ERROR;
@@ -206,6 +225,10 @@ export function useChat(): UseChatReturn {
               toast.error(errorMessage);
             }
           }
+        }
+
+        if (!currentRunIdRef.current && !isInterruptedStream) {
+          toast.error(ERROR_MESSAGES.NO_RUN_ID);
         }
       } catch (error) {
         throw error;

@@ -6,6 +6,7 @@ import { StateGraph, START, END, Annotation } from "@langchain/langgraph";
 import { Document } from "@langchain/core/documents";
 import { RunnableConfig } from "@langchain/core/runnables";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
+import { randomUUID } from "crypto";
 import {
   makeSupabaseClient,
   makeSupabaseVectorStore,
@@ -71,6 +72,13 @@ const IndexStateAnnotation = Annotation.Root({
   textContent: Annotation<string>({
     default: () => "",
     reducer: (existing, incoming) => incoming || existing,
+  }),
+  /**
+   * Stable identifier for text uploads so they can be managed individually.
+   */
+  textId: Annotation<string>({
+    default: () => "",
+    reducer: (_existing, incoming) => incoming || "",
   }),
   /**
    * Thread ID for document scoping (per-chat documents in Supabase).
@@ -250,7 +258,7 @@ async function manageDocuments(
 
   if (operation === "list") {
     const files: DocumentSource[] = [];
-    const textChunks: string[] = [];
+    const textSourceChunks = new Map<string, string[]>();
 
     for (const row of normalizedRows) {
       const metadata = row.metadata || {};
@@ -262,7 +270,19 @@ async function manageDocuments(
       if (source === "user_text") {
         const content = row.content || "";
         if (content.trim()) {
-          textChunks.push(content);
+          const sourceTextId =
+            typeof metadata.text_id === "string" && metadata.text_id.trim()
+              ? metadata.text_id.trim()
+              : "legacy-user-text";
+
+          if (!textSourceChunks.has(sourceTextId)) {
+            textSourceChunks.set(sourceTextId, []);
+          }
+
+          const chunksForSource = textSourceChunks.get(sourceTextId);
+          if (chunksForSource) {
+            chunksForSource.push(content);
+          }
         }
       } else if (filename || (source && source !== "user_text")) {
         const name = filename || source || "document.pdf";
@@ -272,11 +292,13 @@ async function manageDocuments(
       }
     }
 
-    const textSources: TextSource[] = textChunks.map((text, index) => ({
-      type: "text",
-      id: `loaded-text-${index}`,
-      text,
-    }));
+    const textSources: TextSource[] = Array.from(textSourceChunks.entries()).map(
+      ([id, chunks]) => ({
+        type: "text",
+        id,
+        text: chunks.join("\n\n"),
+      })
+    );
 
     return {
       documentsResponse: {
@@ -289,6 +311,7 @@ async function manageDocuments(
   if (operation === "delete") {
     const deleteType = state.deleteType;
     const filename = state.filename?.trim();
+    const textId = state.textId?.trim();
 
     if (deleteType !== "text" && deleteType !== "file") {
       throw new Error("deleteType must be 'text' or 'file'");
@@ -301,7 +324,15 @@ async function manageDocuments(
       .filter((row) => {
         const metadata = row.metadata || {};
         if (deleteType === "text") {
-          return metadata.source === "user_text";
+          if (metadata.source !== "user_text") {
+            return false;
+          }
+
+          if (!textId) {
+            return true;
+          }
+
+          return metadata.text_id === textId;
         }
         return metadata.filename === filename;
       })
@@ -369,8 +400,10 @@ async function uploadDocs(
     }
   } else {
     // Process text content
+    const textId = state.textId?.trim() || randomUUID();
     const textMetadata = {
       source: "user_text",
+      text_id: textId,
       ...(threadId && { thread_id: threadId }),
     };
     docs = [

@@ -6,9 +6,16 @@ import {
 import { getServerLangGraphClient } from "@/lib/langgraph.ts";
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+
 // Configuration constants - 2MB limit as per notes.md
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 const ALLOWED_FILE_TYPES = ["application/pdf"];
+const MAX_TEXT_LENGTH = 20_000;
+const MAX_ID_LENGTH = 200;
+const POLL_INTERVAL_MS = 2000;
+const MAX_POLL_ATTEMPTS = 150;
+const PDF_SIGNATURE = "%PDF-";
 
 /**
  * Interface for PDF file data to send to backend
@@ -25,6 +32,26 @@ interface PDFFileData {
 interface ValidationResult {
   isValid: boolean;
   errors: string[];
+}
+
+interface UploadGraphInput extends Record<string, unknown> {
+  pdfFile?: PDFFileData;
+  textContent?: string;
+  threadId?: string;
+  textId?: string;
+}
+
+function isSupportedUploadContentType(contentType: string): boolean {
+  return (
+    contentType.includes("application/json") ||
+    contentType.includes("multipart/form-data")
+  );
+}
+
+function toOptionalId(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 /**
@@ -57,6 +84,12 @@ function validateFile(file: File | null): ValidationResult {
   if (!ALLOWED_FILE_TYPES.includes(file.type)) {
     errors.push("Only PDF files are allowed");
   }
+  if (!file.name.toLowerCase().endsWith(".pdf")) {
+    errors.push("Only .pdf files are allowed");
+  }
+  if (file.size <= 0) {
+    errors.push("File is empty");
+  }
   if (file.size > MAX_FILE_SIZE) {
     errors.push(
       `File size must be less than ${MAX_FILE_SIZE / (1024 * 1024)}MB`,
@@ -69,6 +102,11 @@ function validateFile(file: File | null): ValidationResult {
   };
 }
 
+function isPdfBuffer(buffer: Buffer): boolean {
+  if (buffer.length < PDF_SIGNATURE.length) return false;
+  return buffer.subarray(0, PDF_SIGNATURE.length).toString("utf8") === PDF_SIGNATURE;
+}
+
 /**
  * Converts File object to base64 encoded PDF file data
  */
@@ -77,6 +115,11 @@ async function convertFileToBase64(file: File): Promise<PDFFileData> {
     const arrayBuffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
     const buffer = Buffer.from(uint8Array);
+
+    if (!isPdfBuffer(buffer)) {
+      throw new Error("Invalid PDF file contents");
+    }
+
     const base64Content = buffer.toString("base64");
 
     return {
@@ -84,9 +127,10 @@ async function convertFileToBase64(file: File): Promise<PDFFileData> {
       content: base64Content,
       mimeType: file.type,
     };
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `Failed to convert file ${file.name} to base64: ${error.message || error}`,
+      `Failed to convert file ${file.name} to base64: ${message}`,
     );
   }
 }
@@ -108,35 +152,91 @@ function createErrorResponse(
   );
 }
 
+async function waitForRunCompletion(
+  client: ReturnType<typeof getServerLangGraphClient>,
+  threadId: string,
+  runId: string,
+  initialStatus: string,
+): Promise<void> {
+  let finalStatus: string = initialStatus;
+  let attempts = 0;
+  await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+
+  while (finalStatus === "pending" || finalStatus === "running") {
+    if (attempts >= MAX_POLL_ATTEMPTS) {
+      throw new Error("Upload timeout: The upload is taking too long");
+    }
+
+    attempts++;
+
+    try {
+      const runStatus = await client.runs.get(threadId, runId);
+      finalStatus = runStatus.status || finalStatus;
+    } catch {
+      if (attempts >= MAX_POLL_ATTEMPTS) {
+        throw new Error("Failed to get upload status");
+      }
+    }
+
+    if (finalStatus === "pending" || finalStatus === "running") {
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    }
+  }
+
+  if (finalStatus === "failed") {
+    throw new Error("The upload graph failed to process the document");
+  }
+  if (finalStatus === "cancelled") {
+    throw new Error("The upload was cancelled");
+  }
+  if (finalStatus !== "success") {
+    throw new Error(`Upload did not complete successfully. Status: ${finalStatus}`);
+  }
+}
+
 /**
  * POST handler for file uploads and text uploads
  * Accepts either:
  * - multipart/form-data with "files" or "file" (PDF)
- * - application/json with { text: string }
+ * - application/json with { text: string, threadId?: string, textId?: string }
  */
 export async function POST(request: NextRequest) {
   try {
     const contentType = request.headers.get("content-type") || "";
 
-    let input: {
-      pdfFile?: PDFFileData;
-      textContent?: string;
-      threadId?: string;
-    };
+    if (!isSupportedUploadContentType(contentType)) {
+      return createErrorResponse("Unsupported content type", 415);
+    }
+
+    let input: UploadGraphInput;
+    const client = getServerLangGraphClient();
 
     if (contentType.includes("application/json")) {
       // Text upload
       const body = await request.json();
       const text = typeof body?.text === "string" ? body.text.trim() : "";
-      const existingThreadId =
-        typeof body?.threadId === "string" ? body.threadId : undefined;
+      const existingThreadId = toOptionalId(body?.threadId);
+      const incomingTextId = toOptionalId(body?.textId);
 
       if (!text) {
         return createErrorResponse("Text content is required", 400);
       }
+      if (text.length > MAX_TEXT_LENGTH) {
+        return createErrorResponse(
+          `Text content must be <= ${MAX_TEXT_LENGTH} characters`,
+          400,
+        );
+      }
+      if (existingThreadId && existingThreadId.length > MAX_ID_LENGTH) {
+        return createErrorResponse("Invalid threadId", 400);
+      }
+      if (incomingTextId && incomingTextId.length > MAX_ID_LENGTH) {
+        return createErrorResponse("Invalid textId", 400);
+      }
+
+      const textId = incomingTextId || crypto.randomUUID();
 
       // Use existing thread if provided, else create new
-      const client = getServerLangGraphClient();
       const thread = existingThreadId
         ? { thread_id: existingThreadId }
         : await client.threads.create({
@@ -147,6 +247,7 @@ export async function POST(request: NextRequest) {
       input = {
         textContent: text,
         threadId: thread.thread_id,
+        textId,
       };
 
       const run = await client.runs.create(thread.thread_id, "upload_graph", {
@@ -159,55 +260,13 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Poll for run completion
-      let finalStatus: string = run.status;
-      let attempts = 0;
-      const maxAttempts = 150;
-      const POLL_INTERVAL_MS = 2000;
-      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-
-      while (finalStatus === "pending" || finalStatus === "running") {
-        if (attempts >= maxAttempts) {
-          throw new Error("Upload timeout: The upload is taking too long");
-        }
-        try {
-          const runStatus = await client.runs.get(thread.thread_id, run.run_id);
-          finalStatus = runStatus.status || finalStatus;
-          attempts++;
-          if (
-            finalStatus === "success" ||
-            finalStatus === "failed" ||
-            finalStatus === "cancelled"
-          ) {
-            break;
-          }
-        } catch (pollError: any) {
-          attempts++;
-          if (attempts >= maxAttempts) {
-            throw new Error(
-              `Failed to get run status: ${pollError || "Unknown error"}`,
-            );
-          }
-        }
-        if (finalStatus === "pending" || finalStatus === "running") {
-          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-        }
-      }
-
-      if (finalStatus === "failed") {
-        throw new Error("The upload graph failed to process the document");
-      } else if (finalStatus === "cancelled") {
-        throw new Error("The upload was cancelled");
-      } else if (finalStatus !== "success") {
-        throw new Error(
-          `Upload did not complete successfully. Status: ${finalStatus}`,
-        );
-      }
+      await waitForRunCompletion(client, thread.thread_id, run.run_id, run.status);
 
       return NextResponse.json({
         message: "Text added successfully",
         threadId: thread.thread_id,
         runId: run.run_id,
+        textId,
       });
     } else {
       // File upload
@@ -215,7 +274,11 @@ export async function POST(request: NextRequest) {
       const file = extractFileFromFormData(formData);
       const existingThreadId = formData.get("threadId");
       const threadIdForUpload =
-        typeof existingThreadId === "string" ? existingThreadId : undefined;
+        typeof existingThreadId === "string" ? existingThreadId.trim() : undefined;
+
+      if (threadIdForUpload && threadIdForUpload.length > MAX_ID_LENGTH) {
+        return createErrorResponse("Invalid threadId", 400);
+      }
 
       const validation = validateFile(file);
       if (!validation.isValid) {
@@ -229,7 +292,6 @@ export async function POST(request: NextRequest) {
       const pdfFile = await convertFileToBase64(file!);
 
       // Use existing thread if provided, else create new
-      const client = getServerLangGraphClient();
       const thread = threadIdForUpload
         ? { thread_id: threadIdForUpload }
         : await client.threads.create({
@@ -252,73 +314,16 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Poll for run completion using runs.get() (correct API for checking existing run status)
-      let finalStatus: string = run.status;
-      let attempts = 0;
-      const maxAttempts = 150; // 5 minutes max (2 seconds per attempt)
-      const POLL_INTERVAL_MS = 2000; // 2 seconds between polls
-
-      // Wait before first poll to avoid immediate request
-      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-
-      while (finalStatus === "pending" || finalStatus === "running") {
-        if (attempts >= maxAttempts) {
-          throw new Error("Upload timeout: The upload is taking too long");
-        }
-
-        try {
-          const runStatus = await client.runs.get(thread.thread_id, run.run_id);
-          finalStatus = runStatus.status || finalStatus;
-          attempts++;
-
-          if (
-            finalStatus === "success" ||
-            finalStatus === "failed" ||
-            finalStatus === "cancelled"
-          ) {
-            break;
-          }
-        } catch (pollError: any) {
-          // If we can't get status, wait a bit and retry
-          attempts++;
-          if (attempts >= maxAttempts) {
-            throw new Error(
-              `Failed to get run status: ${pollError || "Unknown error"}`,
-            );
-          }
-        }
-
-        // Wait before next poll (only if still pending/running)
-        if (finalStatus === "pending" || finalStatus === "running") {
-          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-        }
-      }
-
-      if (finalStatus === "failed") {
-        throw new Error("The upload graph failed to process the document");
-      } else if (finalStatus === "cancelled") {
-        throw new Error("The upload was cancelled");
-      } else if (finalStatus !== "success") {
-        throw new Error(
-          `Upload did not complete successfully. Status: ${finalStatus}`,
-        );
-      }
-
-      const successMessage = input.textContent
-        ? "Text added successfully"
-        : "Document uploaded successfully";
+      await waitForRunCompletion(client, thread.thread_id, run.run_id, run.status);
 
       return NextResponse.json({
-        message: successMessage,
+        message: "Document uploaded successfully",
         threadId: thread.thread_id,
         runId: run.run_id,
       });
     }
-  } catch (error: any) {
-    return createErrorResponse(
-      "Failed to process file",
-      500,
-      error.message || "Unknown error",
-    );
+  } catch (error) {
+    console.error("[upload API] Error:", error);
+    return createErrorResponse("Failed to process upload", 500);
   }
 }

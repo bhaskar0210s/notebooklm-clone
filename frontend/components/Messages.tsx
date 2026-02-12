@@ -16,6 +16,7 @@ import type { Message } from "@/types/chat.ts";
 interface MessagesProps {
   messages: Message[];
   isLoading: boolean;
+  isUploading?: boolean;
   onExamplePromptClick?: (prompt: string) => void;
   onRetry?: () => void;
   onEditPrompt?: (messageIndex: number, content: string) => void;
@@ -30,6 +31,7 @@ const EXAMPLE_PROMPTS = [
 export function Messages({
   messages,
   isLoading,
+  isUploading = false,
   onExamplePromptClick,
   onRetry,
   onEditPrompt,
@@ -151,7 +153,7 @@ export function Messages({
                 <button
                   key={index}
                   onClick={() => onExamplePromptClick(prompt)}
-                  disabled={isLoading}
+                  disabled={isLoading || isUploading}
                   className="w-full rounded-xl border border-gray-700/50 bg-gray-800/50 px-5 py-3.5 text-left text-sm text-gray-300 transition-all hover:border-gray-600/50 hover:bg-gray-800/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-gray-700/50 disabled:hover:bg-gray-800/50"
                 >
                   {prompt}

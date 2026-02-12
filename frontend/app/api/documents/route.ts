@@ -37,6 +37,7 @@ type DocumentsOperationInput =
       operation: "delete";
       threadId: string;
       deleteType: "text" | "file";
+      textId?: string;
       filename?: string;
     };
 
@@ -94,12 +95,14 @@ export async function GET(request: NextRequest) {
 
 /**
  * DELETE /api/documents?threadId=xxx&type=text
+ * DELETE /api/documents?threadId=xxx&type=text&textId=abc123
  * DELETE /api/documents?threadId=xxx&type=file&filename=doc.pdf
  * Deletes documents via backend service for the given thread.
  */
 export async function DELETE(request: NextRequest) {
   const threadId = request.nextUrl.searchParams.get("threadId");
   const type = request.nextUrl.searchParams.get("type");
+  const textId = request.nextUrl.searchParams.get("textId");
   const filename = request.nextUrl.searchParams.get("filename");
 
   if (!threadId) {
@@ -126,6 +129,7 @@ export async function DELETE(request: NextRequest) {
       operation: "delete",
       threadId,
       deleteType: type,
+      ...(textId ? { textId } : {}),
       ...(filename ? { filename } : {}),
     });
 
